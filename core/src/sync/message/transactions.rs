@@ -123,7 +123,7 @@ pub struct TransactionDigests {
     short_ids: Vec<u8>, // 4 bytes ids which stores in sequential order
     pub tx_hashes: Vec<H256>, // SHA-3 hash
 }
-
+ // 发消息
 impl Handleable for TransactionDigests {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         {
@@ -368,6 +368,7 @@ impl Request for GetTransactions {
 
 impl Handleable for GetTransactions {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        info!("Receive msg from GetTransactions."); //收交易
         let transactions = ctx
             .manager
             .request_manager
@@ -510,6 +511,7 @@ impl Request for GetTransactionsFromTxHashes {
 
 impl Handleable for GetTransactionsFromTxHashes {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        info!("Receive msg from GetTransactionsFromTxHashes.");
         let transactions = ctx
             .manager
             .request_manager
@@ -565,6 +567,7 @@ pub struct GetTransactionsResponse {
 
 impl Handleable for GetTransactionsResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        info!("Receive msg from GetTransactionsResponse."); //收交易
         let _timer = MeterTimer::time_func(TX_HANDLE_TIMER.as_ref());
 
         debug!("on_get_transactions_response {:?}", self.request_id);
@@ -589,6 +592,8 @@ impl Handleable for GetTransactionsResponse {
         // transactions when in the catch up mode because the state is still
         // not correct. We therefore do not insert transactions when in the
         // catch up mode.
+        
+        // 插入交易入池
         if !ctx.manager.catch_up_mode() {
             let (signed_trans, failure) = ctx
                 .manager
@@ -642,6 +647,7 @@ pub struct GetTransactionsFromTxHashesResponse {
 
 impl Handleable for GetTransactionsFromTxHashesResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        info!("Receive msg from GetTransactionsFromTxHashesResponse.");
         let _timer = MeterTimer::time_func(TX_HANDLE_TIMER.as_ref());
 
         debug!(

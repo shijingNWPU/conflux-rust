@@ -22,6 +22,8 @@ extern crate static_assertions;
 extern crate sha3_macro;
 extern crate substrate_bn as bn;
 
+extern crate rust_dilithium2 as rdil;
+
 #[macro_use]
 pub mod message;
 
@@ -65,6 +67,7 @@ pub use crate::{
     },
     transaction_pool::{SharedTransactionPool, TransactionPool},
     unique_id::UniqueId,
+    verification::verify_quantum_signature,
 };
 pub use cfx_parameters::{
     block as block_parameters, consensus as consensus_parameters,

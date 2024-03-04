@@ -290,8 +290,13 @@ class RpcClient:
         if wait_for_catchup:
             self.node.wait_for_phase(["NormalSyncPhase"])
         tx_hash = self.node.cfx_sendRawTransaction(raw_tx)
+        print("tx_hash:", tx_hash)
         assert_is_hash_string(tx_hash)
         return tx_hash
+    
+    def check_tx_in_pool(self):
+        json_result = self.node.txpool_status()
+        return json_result
 
     def clear_tx_pool(self):
         self.node.txpool_clear()

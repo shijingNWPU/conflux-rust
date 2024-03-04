@@ -15,7 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::{Address, Error, Public, Secret, SECP256K1};
-use cfx_types::address_util::AddressUtil;
+use cfx_types::{address_util::AddressUtil, H512};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parity_crypto::Keccak256 as _;
 use secp256k1::key;
@@ -30,6 +30,23 @@ pub fn public_to_address(public: &Public, type_nibble: bool) -> Address {
     if type_nibble {
         result.set_user_account_type_bits();
     }
+    result
+}
+
+pub fn public_quantum_to_address(public: &Vec<u8>) -> Address {
+    let hash = public.keccak256();
+    let mut result = Address::zero();
+    result.as_bytes_mut().copy_from_slice(&hash[12..]);
+    result.set_user_account_type_bits();
+    result
+}
+
+pub fn get_quantum_public(public: &Vec<u8>) -> H512 {
+    let hash = public.keccak256();
+
+    let mut result = H512::zero();
+    //result.as_bytes_mut().copy_from_slice(&hash[12..]);
+    result.as_bytes_mut()[..hash.len()].copy_from_slice(&hash);
     result
 }
 

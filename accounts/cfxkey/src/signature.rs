@@ -41,6 +41,10 @@ use SECP256K1;
 pub struct Signature([u8; 65]);
 
 impl Signature {
+    pub fn new() -> Self {
+        Signature([0; 65])
+    }
+
     /// Get a slice into the 'r' portion of the data.
     pub fn r(&self) -> &[u8] { &self.0[0..32] }
 

@@ -15,6 +15,11 @@ use std::{
 };
 use threadpool::ThreadPool;
 
+use primitives::transaction::Sign;
+
+use crate::verification::verify_quantum_signature;
+use cfxkey::get_quantum_public;
+
 lazy_static! {
     static ref RECOVER_PUB_KEY_QUEUE: Arc<dyn Queue> =
         register_queue("recover_public_key_queue");
@@ -140,6 +145,7 @@ impl TransactionDataManager {
         for (idx, tx) in self.recover_uncached_tx(uncached_trans)? {
             recovered_trans[idx] = Some(tx);
         }
+        info!("recovered_trans:{:?}", recovered_trans);
         Ok(recovered_trans
             .into_iter()
             .map(|e| e.expect("All tx recovered"))
@@ -158,19 +164,41 @@ impl TransactionDataManager {
         let mut recovered_trans = Vec::new();
         if uncached_trans.len() < WORKER_COMPUTATION_PARALLELISM * 8 {
             for (idx, tx) in uncached_trans {
-                if let Ok(public) = tx.recover_public() {
-                    recovered_trans.push((
-                        idx,
-                        Arc::new(SignedTransaction::new(public, tx.clone())),
-                    ));
-                } else {
-                    info!(
-                        "Unable to recover the public key of transaction {:?}",
-                        tx.hash()
-                    );
-                    return Err(DecoderError::Custom(
-                        "Cannot recover public key",
-                    ));
+                match tx.transaction.sign_info {
+                    Sign::Curve(..) => {
+                        if let Ok(public) = tx.recover_public() {
+                            recovered_trans.push((
+                                idx,
+                                Arc::new(SignedTransaction::new(public, tx.clone())),
+                            ));
+                        } else {
+                            info!(
+                                "Unable to recover the public key of transaction {:?}",
+                                tx.hash()
+                            );
+                            return Err(DecoderError::Custom(
+                                "Cannot recover public key",
+                            ));
+                        }        
+                    }
+                    Sign::Quantum(ref sign_info) => {
+                        let is_quantum_signature = verify_quantum_signature(tx.clone());
+
+                        if !is_quantum_signature {
+                            return Err(DecoderError::Custom(
+                                "Signature cannot pass verification",
+                            ));
+                        }else{
+                            let st = SignedTransaction::new(
+                                get_quantum_public(&sign_info.public_key.clone()),
+                                tx.clone());
+                            recovered_trans.push((
+                                idx,
+                                Arc::new(st),
+                            ));
+                        }
+
+                    }
                 }
             }
         } else {

@@ -271,8 +271,8 @@ class ConfluxTestFramework:
             self.log.removeHandler(handler)
             handler.close()
         logging.shutdown()
-        if cleanup_tree_on_exit:
-            shutil.rmtree(self.options.tmpdir)
+        # if cleanup_tree_on_exit:
+        #    shutil.rmtree(self.options.tmpdir)
         sys.exit(exit_code)
 
     # Methods to override in subclass test scripts.

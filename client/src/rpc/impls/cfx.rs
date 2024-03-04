@@ -103,6 +103,7 @@ use cfxcore::{
 };
 use diem_types::account_address::AccountAddress;
 use serde::Serialize;
+use primitives::transaction::Sign;
 
 #[derive(Debug)]
 pub(crate) struct BlockExecInfo {
@@ -463,15 +464,26 @@ impl RpcImpl {
 
         let tx: TransactionWithSignature =
             invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
+        info!("TransactionWithSignature tx:{:?}",tx);
 
-        if tx.recover_public().is_err() {
-            bail!(invalid_params(
-                "tx",
-                "Can not recover pubkey for Ethereum like tx"
-            ));
+        match tx.transaction.sign_info {
+            Sign::Curve(..) => {
+                if tx.recover_public().is_err() {
+                    bail!(invalid_params(
+                        "tx",
+                        "Can not recover pubkey for Ethereum like tx"
+                    ));
+                }
+            }
+            Sign::Quantum(..)  => { }
         }
 
+        info!("transaction:{:?}", tx);
+
         let r = self.send_transaction_with_signature(tx);
+        
+        info!("result r:{:?}",r);
+
         if r.is_ok() && self.config.dev_pack_tx_immediately {
             // Try to pack and execute this new tx.
             for _ in 0..DEFERRED_STATE_EPOCH_COUNT {

@@ -24,6 +24,7 @@ use cfx_executor::machine::{new_machine_with_builtin, Machine, VmFactory};
 use cfx_parameters::genesis::DEV_GENESIS_KEY_PAIR_2;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, Space, U256};
+use cfx_types::AddressSpaceUtil;
 pub use cfxcore::pos::pos::PosDropHandle;
 use cfxcore::{
     block_data_manager::BlockDataManager,
@@ -68,6 +69,7 @@ use crate::{
     GENESIS_VERSION,
 };
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
+
 
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
@@ -324,7 +326,7 @@ pub fn initialize_common_modules(
         });
     }
 
-    let genesis_accounts = if conf.is_test_or_dev_mode() {
+    let mut genesis_accounts = if conf.is_test_or_dev_mode() {
         match conf.raw_conf.genesis_secrets {
             Some(ref file) => {
                 genesis::load_secrets_file(file, secret_store.as_ref())?
@@ -358,6 +360,16 @@ pub fn initialize_common_modules(
     let consensus_conf = conf.consensus_config();
     let vm = VmFactory::new(1024 * 32);
     let machine = Arc::new(new_machine_with_builtin(conf.common_params(), vm));
+
+    // quantum account
+    genesis_accounts.insert(
+        Address::from_str("148c7dca248da87500367be3ca2d70dbd90bf97c")
+            .unwrap()
+            .with_native_space(),
+        U256::from_dec_str("5000000000000000000000000000000000").expect("Not overflow"),
+    );
+
+    info!("genesis_accounts1: {:?}", genesis_accounts);
 
     let genesis_block = genesis_block(
         &storage_manager,

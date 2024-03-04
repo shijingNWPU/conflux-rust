@@ -18,7 +18,7 @@ use cfxcore::{
     SharedSynchronizationService, SharedTransactionPool, Stopable,
 };
 use lazy_static::lazy_static;
-use log::{debug, trace, warn};
+use log::{debug, info, trace, warn};
 use metrics::{Gauge, GaugeUsize};
 use parking_lot::{Mutex, RwLock};
 use primitives::{pos::PosBlockId, *};
@@ -702,6 +702,7 @@ impl BlockGenerator {
     }
 
     pub fn start_mining(bg: Arc<BlockGenerator>, _payload_len: u32) {
+        info!("start_mining.");
         let mut current_mining_block = None;
         let mut recent_mining_blocks = vec![];
         let mut recent_mining_problems = vec![];

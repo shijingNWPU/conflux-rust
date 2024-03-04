@@ -8,17 +8,18 @@ use cfx_types::{
     H256, U256,
 };
 use keylib::{
-    self, public_to_address, recover, verify_public, Public, Secret, Signature,
+    self, public_to_address, public_quantum_to_address, recover, verify_public, Public, Secret, Signature
 };
+use log::{error, info};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 use std::{
-    error, fmt,
-    ops::{Deref, DerefMut},
+    error, fmt::{self, Debug}, ops::{Deref, DerefMut}
 };
 use unexpected::OutOfBounds;
+
 
 /// Fake address for unsigned transactions.
 pub const UNSIGNED_SENDER: Address = H160([0xff; 20]);
@@ -256,9 +257,12 @@ impl NativeTransaction {
             transaction: TransactionWithSignature {
                 transaction: TransactionWithSignatureSerializePart {
                     unsigned: Transaction::Native(self),
-                    r: U256::one(),
-                    s: U256::one(),
-                    v: 0,
+                    sign_info: Sign::Curve(Curve { 
+                        r: U256::one(),
+                        s: U256::one(),
+                        v: 0,
+                    }),
+
                 },
                 hash: H256::zero(),
                 rlp_size: None,
@@ -318,9 +322,11 @@ impl Eip155Transaction {
                     // we use sender address for `r` and `s` so that phantom
                     // transactions with matching fields from different senders
                     // will have different hashes
-                    r: U256::from(from.address.as_ref()),
-                    s: U256::from(from.address.as_ref()),
-                    v: 0,
+                    sign_info: Sign::Curve(Curve { 
+                        r: U256::from(from.address.as_ref()),
+                        s: U256::from(from.address.as_ref()),
+                        v: 0,
+                    }),
                 },
                 hash: H256::zero(),
                 rlp_size: None,
@@ -339,9 +345,11 @@ impl Eip155Transaction {
             transaction: TransactionWithSignature {
                 transaction: TransactionWithSignatureSerializePart {
                     unsigned: Transaction::Ethereum(self),
-                    r: U256::one(),
-                    s: U256::one(),
-                    v: 0,
+                    sign_info: Sign::Curve(Curve { 
+                        r: U256::one(),
+                        s: U256::one(),
+                        v: 0,
+                    }),
                 },
                 hash: H256::zero(),
                 rlp_size: None,
@@ -532,9 +540,11 @@ impl Transaction {
         TransactionWithSignature {
             transaction: TransactionWithSignatureSerializePart {
                 unsigned: self,
-                r: sig.r().into(),
-                s: sig.s().into(),
-                v: sig.v(),
+                sign_info: Sign::Curve(Curve { 
+                    r: sig.r().into(),
+                    s: sig.s().into(),
+                    v: sig.v(),
+                }),
             },
             hash: H256::zero(),
             rlp_size: None,
@@ -549,11 +559,8 @@ impl MallocSizeOf for Transaction {
     }
 }
 
-/// Signed transaction information without verified signature.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct TransactionWithSignatureSerializePart {
-    /// Plain Transaction.
-    pub unsigned: Transaction,
+pub struct Curve{
     /// The V field of the signature; helps describe which half of the curve
     /// our point falls in.
     pub v: u8,
@@ -563,40 +570,99 @@ pub struct TransactionWithSignatureSerializePart {
     pub s: U256,
 }
 
+impl Decodable for Curve {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        let v: u8 = rlp.val_at(0)?;
+        let r: U256 = rlp.val_at(1)?;
+        let s: U256 = rlp.val_at(2)?;
+        Ok(Curve { 
+            v: v, 
+            r: r, 
+            s: s
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Quantum{
+    pub signed_msg: Vec<u8>,
+    pub public_key: Vec<u8>,
+}
+
+impl Decodable for Quantum {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        let signed_msg = rlp.val_at(0)?;
+        let public_key = rlp.val_at(1)?;
+        Ok(Quantum{
+            signed_msg: signed_msg,
+            public_key: public_key,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub enum Sign{
+    Curve(Curve),
+    Quantum(Quantum),
+}
+
+/// Signed transaction information without verified signature.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct TransactionWithSignatureSerializePart {
+    /// Plain Transaction.
+    pub unsigned: Transaction,
+    pub sign_info: Sign,
+}
+
 impl Encodable for TransactionWithSignatureSerializePart {
     fn rlp_append(&self, s: &mut RlpStream) {
-        match self.unsigned {
-            Transaction::Native(ref tx) => {
-                s.begin_list(4);
+        if let Sign::Quantum(sign_info) = self.sign_info.clone(){
+            s.begin_list(3);
+            if let Transaction::Native(tx) = &self.unsigned {
+                s.append(&sign_info.signed_msg);
                 s.append(tx);
-                s.append(&self.v);
-                s.append(&self.r);
-                s.append(&self.s);
+                s.append(&sign_info.public_key); 
             }
-            Transaction::Ethereum(ref tx) => {
-                let Eip155Transaction {
-                    nonce,
-                    gas_price,
-                    gas,
-                    action,
-                    value,
-                    data,
-                    chain_id,
-                } = tx;
-                let legacy_v = eip155_signature::add_chain_replay_protection(
-                    self.v,
-                    chain_id.map(|x| x as u64),
-                );
-                s.begin_list(9);
-                s.append(nonce);
-                s.append(gas_price);
-                s.append(gas);
-                s.append(action);
-                s.append(value);
-                s.append(data);
-                s.append(&legacy_v);
-                s.append(&self.r);
-                s.append(&self.s);
+            else{
+                error!("only native transaction can be signed with Quantum");
+            }
+        }
+        
+        if let Sign::Curve(sign_info) = self.sign_info.clone() {
+            // curve
+            match self.unsigned {
+                Transaction::Native(ref tx) => {
+                    s.begin_list(4);
+                    s.append(tx);
+                    s.append(&sign_info.v);
+                    s.append(&sign_info.r);
+                    s.append(&sign_info.s);
+                }
+                Transaction::Ethereum(ref tx) => {
+                    let Eip155Transaction {
+                        nonce,
+                        gas_price,
+                        gas,
+                        action,
+                        value,
+                        data,
+                        chain_id,
+                    } = tx;
+                    let legacy_v = eip155_signature::add_chain_replay_protection(
+                        sign_info.v,
+                        chain_id.map(|x| x as u64),
+                    );
+                    s.begin_list(9);
+                    s.append(nonce);
+                    s.append(gas_price);
+                    s.append(gas);
+                    s.append(action);
+                    s.append(value);
+                    s.append(data);
+                    s.append(&legacy_v);
+                    s.append(&sign_info.r);
+                    s.append(&sign_info.s);
+                }
             }
         }
     }
@@ -604,7 +670,22 @@ impl Encodable for TransactionWithSignatureSerializePart {
 
 impl Decodable for TransactionWithSignatureSerializePart {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        info!("TransactionWithSignatureSerializePart. rlp.item_count(){:?}", rlp.item_count()?);
+        
         match rlp.item_count()? {
+            3 => {
+                let signed_tx: Vec<u8> = rlp.val_at(0)?;
+                let unsigned: NativeTransaction = rlp.val_at(1)?;
+                let public_key: Vec<u8> = rlp.val_at(2)?;
+
+                Ok(TransactionWithSignatureSerializePart{
+                    unsigned: Transaction::Native(unsigned),
+                    sign_info: Sign::Quantum(Quantum{
+                        signed_msg: signed_tx,
+                        public_key: public_key,
+                    }),
+                })
+            }
             4 => {
                 let unsigned: NativeTransaction = rlp.val_at(0)?;
                 let v: u8 = rlp.val_at(1)?;
@@ -612,9 +693,11 @@ impl Decodable for TransactionWithSignatureSerializePart {
                 let s: U256 = rlp.val_at(3)?;
                 Ok(TransactionWithSignatureSerializePart {
                     unsigned: Transaction::Native(unsigned),
-                    v,
-                    r,
-                    s,
+                    sign_info: Sign::Curve(Curve { 
+                        v: v,
+                        r: r, 
+                        s: s, 
+                    }),
                 })
             }
             9 => {
@@ -629,6 +712,12 @@ impl Decodable for TransactionWithSignatureSerializePart {
                 let s: U256 = rlp.val_at(8)?;
 
                 let v = eip155_signature::extract_standard_v(legacy_v);
+
+                let curve = Curve{
+                    v: v,
+                    r: r,
+                    s: s,
+                };
                 let chain_id =
                     match eip155_signature::extract_chain_id_from_legacy_v(
                         legacy_v,
@@ -651,9 +740,7 @@ impl Decodable for TransactionWithSignatureSerializePart {
                         chain_id,
                         data,
                     }),
-                    v,
-                    r,
-                    s,
+                    sign_info: Sign::Curve(curve),
                 })
             }
             _ => Err(DecoderError::RlpInvalidLength),
@@ -699,7 +786,7 @@ impl Decodable for TransactionWithSignature {
         let hash = keccak(d.as_raw());
         let rlp_size = Some(d.as_raw().len());
         // Check item count of TransactionWithSignatureSerializePart
-        if d.item_count()? != 4 && d.item_count()? != 9 {
+        if d.item_count()? != 3 && d.item_count()? != 4 && d.item_count()? != 9 {
             return Err(DecoderError::RlpIncorrectListLen);
         }
         let transaction = d.as_val()?;
@@ -722,9 +809,11 @@ impl TransactionWithSignature {
         TransactionWithSignature {
             transaction: TransactionWithSignatureSerializePart {
                 unsigned: tx,
-                s: 0.into(),
-                r: 0.into(),
-                v: 0,
+                sign_info: Sign::Curve(Curve {
+                    s: 0.into(),
+                    r: 0.into(),
+                    v: 0,
+                }),
             },
             hash: Default::default(),
             rlp_size: None,
@@ -739,21 +828,46 @@ impl TransactionWithSignature {
     }
 
     /// Checks whether signature is empty.
-    pub fn is_unsigned(&self) -> bool { self.r.is_zero() && self.s.is_zero() }
+    pub fn is_unsigned(&self) -> bool { 
+        match &self.sign_info {
+            Sign::Curve(cur) => {
+                return cur.r.is_zero() && cur.s.is_zero();
+            },
+            Sign::Quantum(..) => {
+                return false;
+            },
+        }
+    }
 
     /// Construct a signature object from the sig.
     pub fn signature(&self) -> Signature {
-        let r: H256 = BigEndianHash::from_uint(&self.r);
-        let s: H256 = BigEndianHash::from_uint(&self.s);
-        Signature::from_rsv(&r, &s, self.v)
+        match &self.sign_info {
+            Sign::Curve(cur) => {
+                let r: H256 = BigEndianHash::from_uint(&cur.r);
+                let s: H256 = BigEndianHash::from_uint(&cur.s);
+                
+                return Signature::from_rsv(&r, &s, cur.v)  
+            },
+            Sign::Quantum(..) => {
+                error!("cannot sign transaction with quantum signature");
+                return Signature::new();
+            },
+        }
     }
 
     /// Checks whether the signature has a low 's' value.
     pub fn check_low_s(&self) -> Result<(), keylib::Error> {
-        if !self.signature().is_low_s() {
-            Err(keylib::Error::InvalidSignature)
-        } else {
-            Ok(())
+        match self.sign_info {
+            Sign::Curve(..) => {
+                if !self.signature().is_low_s() {
+                    Err(keylib::Error::InvalidSignature)
+                } else {
+                    Ok(())
+                }
+            }
+            Sign::Quantum(..) => {
+                Ok(())
+            }
         }
     }
 
@@ -774,6 +888,7 @@ impl MallocSizeOf for TransactionWithSignature {
         self.unsigned.size_of(ops)
     }
 }
+
 
 /// A signed transaction with successfully recovered `sender`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -820,20 +935,33 @@ impl SignedTransaction {
     /// Try to verify transaction and recover sender.
     pub fn new(public: Public, transaction: TransactionWithSignature) -> Self {
         if transaction.is_unsigned() {
-            SignedTransaction {
+            return SignedTransaction {
                 transaction,
                 sender: UNSIGNED_SENDER,
                 public: None,
             }
         } else {
-            let sender = public_to_address(
-                &public,
-                transaction.space() == Space::Native,
-            );
-            SignedTransaction {
-                transaction,
-                sender,
-                public: Some(public),
+            match transaction.transaction.sign_info {
+                Sign::Curve(..) => {
+                    let sender = public_to_address(
+                        &public,
+                        transaction.space() == Space::Native,
+                    );
+                    return SignedTransaction {
+                        transaction,
+                        sender,
+                        public: Some(public),
+                    }
+                }
+                Sign::Quantum(ref sign_info) => {
+                    let sign_info_public = sign_info.public_key.clone();
+                    let sender_quantum = public_quantum_to_address(&sign_info_public);
+                    return SignedTransaction {
+                        transaction,
+                        sender: sender_quantum,
+                        public: Some(public),
+                    }
+                }
             }
         }
     }
@@ -882,16 +1010,23 @@ impl SignedTransaction {
         if self.public.is_none() {
             return Ok(false);
         }
-
-        if !skip {
-            let public = self.public.unwrap();
-            Ok(verify_public(
-                &public,
-                &self.signature(),
-                &self.unsigned.signature_hash(),
-            )?)
-        } else {
-            Ok(true)
+        match self.transaction.transaction.sign_info {
+            Sign::Curve(..) => {
+                if !skip {
+                    let public = self.public.unwrap();
+                    Ok(verify_public(
+                        &public,
+                        &self.signature(),
+                        &self.unsigned.signature_hash(),
+                    )?)
+                } else {
+                    Ok(true)
+                }
+            }
+            Sign::Quantum(..) => {
+                // todo
+                Ok(true)
+            }
         }
     }
 }

@@ -418,8 +418,9 @@ impl TransactionPool {
         // Note, the workload of recovering public key is very heavy, especially
         // in case of high TPS (e.g. > 8000). So, it's better to recover public
         // key after basic verification.
+        //info!("self.data_man.recover_unsigned_tx:{:?}", self.data_man.recover_unsigned_tx(&transactions));
         match self.data_man.recover_unsigned_tx(&transactions) {
-            Ok(signed_trans) => {
+            Ok(signed_trans) => {           
                 let account_cache = self.get_best_state_account_cache();
                 let mut inner =
                     self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
@@ -591,9 +592,9 @@ impl TransactionPool {
         let mode = VerifyTxMode::Local(VerifyTxLocalMode::MaybeLater, spec);
 
         if basic_check {
-            self.verification_config
-                .check_tx_size(transaction)
-                .map_err(|e| e.to_string())?;
+            // self.verification_config
+            //     .check_tx_size(transaction)
+            //     .map_err(|e| e.to_string())?;
             if let Err(e) = self.verification_config.verify_transaction_common(
                 transaction,
                 chain_id,

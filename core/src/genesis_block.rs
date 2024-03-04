@@ -119,6 +119,7 @@ pub fn genesis_block(
         machine.internal_contracts().initialized_at_genesis(),
     );
     trace!("genesis_accounts: {:?}", genesis_accounts);
+    info!("genesis_accounts: {:?}", genesis_accounts);
     for (addr, balance) in genesis_accounts {
         state
             .add_balance(&addr, &balance, CleanupMode::NoEmpty)

@@ -13,6 +13,7 @@ use primitives::{
     SignedTransaction, Transaction as PrimitiveTransaction, TransactionIndex,
     TransactionWithSignature, TransactionWithSignatureSerializePart,
 };
+use primitives::transaction::{Curve, Sign};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -114,6 +115,17 @@ impl Transaction {
             Space::Native => None,
             Space::Ethereum => Some(Space::Ethereum),
         };
+
+        let mut v: U256 = Default::default();
+        let mut r: U256 = Default::default();
+        let mut s: U256 = Default::default();
+        
+        if let Sign::Curve(cur) = t.transaction.sign_info.clone() {
+            v = cur.v.into();
+            r = cur.r;
+            s = cur.s;   
+        }
+        
         Ok(Transaction {
             space,
             hash: t.transaction.hash().into(),
@@ -136,9 +148,9 @@ impl Transaction {
             storage_limit: storage_limit.into(),
             epoch_height: epoch_height.into(),
             chain_id: t.chain_id().map(|x| U256::from(x as u64)),
-            v: t.transaction.v.into(),
-            r: t.transaction.r.into(),
-            s: t.transaction.s.into(),
+            v: v,
+            r: r,
+            s: s,
         })
     }
 
@@ -181,9 +193,11 @@ impl Transaction {
                     }
                     .into()
                 },
-                v: self.v.as_usize() as u8,
-                r: self.r.into(),
-                s: self.s.into(),
+                sign_info: Sign::Curve(Curve{
+                    v: self.v.as_usize() as u8,
+                    r: self.r.into(),
+                    s: self.s.into(),
+                }),
             },
             hash: self.hash.into(),
             rlp_size: None,

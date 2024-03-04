@@ -111,7 +111,9 @@ impl Transaction {
         //     TypedTransaction::Legacy(_) => None,
         // };
 
-        Transaction {
+
+
+        let tx = Transaction {
             hash: t.hash(),
             nonce: *t.nonce(),
             block_hash: block_info.0,
@@ -140,7 +142,8 @@ impl Transaction {
             r: signature.r().into(),
             s: signature.s().into(),
             status: exec_info.0,
-        }
+        };
+        tx
     }
 
     pub fn deployed_contract_address(t: &SignedTransaction) -> Option<H160> {

@@ -1370,6 +1370,9 @@ impl SynchronizationProtocolHandler {
         let mut tx_hashes_part: Vec<H256> = vec![];
         let (short_ids_transactions, tx_hashes_transactions) = {
             let mut transactions = self.get_to_propagate_trans();
+            
+            info!("get_to_propagate_trans:{:?}", transactions);
+
             if transactions.is_empty() {
                 return;
             }
@@ -1464,7 +1467,7 @@ impl SynchronizationProtocolHandler {
                 short_ids_part.pop().unwrap(),
                 tx_hashes_part.clone(),
             );
-            match tx_msg.send(io, &peer_id) {
+            match tx_msg.send(io, &peer_id) {   // send tx
                 Ok(_) => {
                     trace!(
                         "{:02} <- Transactions ({} entries)",

@@ -31,6 +31,9 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde_derive::{Deserialize, Serialize};
 use std::{collections::HashSet, convert::TryInto, sync::Arc};
 use unexpected::{Mismatch, OutOfBounds};
+use primitives::transaction::Sign;
+use rdil;
+use rlp::RlpStream;
 
 #[derive(Clone)]
 pub struct VerificationConfig {
@@ -637,7 +640,7 @@ impl VerificationConfig {
                 bail!(TransactionError::TooLargeNonce)
             }
         }
-
+        
         // ******************************************
         // Each constraint depends on a mode or a CIP should be
         // implemented in a seperated function.
@@ -759,6 +762,46 @@ impl<'a> VerifyTxMode<'a> {
             false
         }
     }
+}
+
+
+pub fn verify_quantum_signature(tx: TransactionWithSignature) -> bool {
+    let Sign::Quantum(quantum) = tx.transaction.sign_info else { 
+        return false;
+    };
+
+    let rlp_transaction = match tx.transaction.unsigned{
+        Transaction::Native(tx) => {
+            let mut rlp_stream = RlpStream::new();
+            rlp_stream.append(&tx);
+            rlp_stream.drain()
+        }
+        Transaction::Ethereum(tx) => {
+            let mut rlp_stream = RlpStream::new();
+            rlp_stream.append(&tx);
+            rlp_stream.drain()
+        }
+    };
+
+    //info!("rlp_transaction:{:?}", (&rlp_transaction));
+
+
+    let result = rdil::sign::verify_sign(
+        &rdil::sign::Message{
+            data: rlp_transaction,
+        },
+        &rdil::sign::SignedMessage{
+            data: quantum.signed_msg.clone(), 
+            smlen: quantum.signed_msg.len(),
+        },
+        
+        &rdil::sign::PublicKey{
+            data: quantum.public_key,
+        },
+        
+    );
+    
+    return result.is_ok();
 }
 
 #[cfg(test)]
