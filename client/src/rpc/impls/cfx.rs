@@ -482,7 +482,7 @@ impl RpcImpl {
 
         let r = self.send_transaction_with_signature(tx);
         
-        info!("result r:{:?}",r);
+        info!("result r:{:?}  self.config.dev_pack_tx_immediately:{:?}",r, self.config.dev_pack_tx_immediately);
 
         if r.is_ok() && self.config.dev_pack_tx_immediately {
             // Try to pack and execute this new tx.

@@ -5,6 +5,7 @@ version = "0.3.0"
 authors = ["Conflux Foundation"]
 
 [dependencies]
+metrics = { path = "../../util/metrics" }
 cfx-types = { path = "../../cfx_types" }
 edit-distance = "2.0"
 parity-crypto = "0.9.0"

@@ -34,6 +34,17 @@ use unexpected::{Mismatch, OutOfBounds};
 use primitives::transaction::Sign;
 use rdil;
 use rlp::RlpStream;
+use metrics::{Histogram, Sample};
+use std::time::Instant;
+
+lazy_static! {
+    static ref VERIFY_QUANTUM_SIGNATURE_TIME: Arc<dyn Histogram> =
+        Sample::ExpDecay(0.015).register_with_group(
+            "performance testing",
+            "verify_sign",
+            1024
+        );
+}
 
 #[derive(Clone)]
 pub struct VerificationConfig {
@@ -766,6 +777,7 @@ impl<'a> VerifyTxMode<'a> {
 
 
 pub fn verify_quantum_signature(tx: TransactionWithSignature) -> bool {
+    let start_time = Instant::now();
     let Sign::Quantum(quantum) = tx.transaction.sign_info else { 
         return false;
     };
@@ -801,6 +813,7 @@ pub fn verify_quantum_signature(tx: TransactionWithSignature) -> bool {
         
     );
     
+    VERIFY_QUANTUM_SIGNATURE_TIME.update_since(start_time);
     return result.is_ok();
 }
 

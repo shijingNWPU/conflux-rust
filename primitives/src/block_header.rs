@@ -175,6 +175,9 @@ impl BlockHeader {
         self.timestamp = timestamp;
     }
 
+    /// only for performance testing
+    // pub fn set_gas_limit(&mut self, gas_limit: U256){ self.gas_limit = gas_limit; }
+
     /// Set the custom filed of the header.
     pub fn set_custom(&mut self, custom: Vec<Bytes>) { self.custom = custom; }
 

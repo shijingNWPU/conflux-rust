@@ -18,7 +18,8 @@ use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{NetworkService, ProtocolId};
 use primitives::{transaction::SignedTransaction, Block};
-use std::sync::Arc;
+use std::{sync::Arc};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(DeriveMallocSizeOf)]
 pub struct SynchronizationService {
@@ -99,7 +100,12 @@ impl SynchronizationService {
 
     pub fn on_mined_block(&self, block: Block) -> Result<(), Error> {
         let hash = block.hash();
-        self.protocol_handler.on_mined_block(block);
+        
+        if block.transactions.len() != 0 {
+            info!("[performance testing] block hash:{:?} timestamp:{:?}", hash, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos());
+        }
+
+        self.protocol_handler.on_mined_block(block.clone());
         self.relay_blocks(vec![hash])
     }
 

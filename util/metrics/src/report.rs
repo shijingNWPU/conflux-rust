@@ -181,21 +181,29 @@ impl<T: Histogram> Reportable for T {
 
     fn get_value_with_group(&self, name: &String) -> String {
         let snapshot = self.snapshot();
+        // format!(
+        //     "{0}.count: {1}, {0}.min: {2}, {0}.mean: {3:.2}, {0}.max: {4}, {0}.stddev: {5:.2}, {0}.variance: {6:.2}, {0}.p50: {7}, {0}.p75: {8}, {0}.p90: {9}, {0}.p95: {10}, {0}.p99: {11}, {0}.p999: {12}",
+        //     name,
+        //     snapshot.count(),
+        //     snapshot.min(),
+        //     snapshot.mean(),
+        //     snapshot.max(),
+        //     snapshot.stddev(),
+        //     snapshot.variance(),
+        //     snapshot.percentile(0.5),
+        //     snapshot.percentile(0.75),
+        //     snapshot.percentile(0.9),
+        //     snapshot.percentile(0.95),
+        //     snapshot.percentile(0.99),
+        //     snapshot.percentile(0.999),
+        // )
         format!(
-            "{0}.count: {1}, {0}.min: {2}, {0}.mean: {3:.2}, {0}.max: {4}, {0}.stddev: {5:.2}, {0}.variance: {6:.2}, {0}.p50: {7}, {0}.p75: {8}, {0}.p90: {9}, {0}.p95: {10}, {0}.p99: {11}, {0}.p999: {12}",
+            "{0}.count: {1}, {0}.min: {2}, {0}.mean: {3:.2}, {0}.max: {4}",
             name,
             snapshot.count(),
             snapshot.min(),
             snapshot.mean(),
             snapshot.max(),
-            snapshot.stddev(),
-            snapshot.variance(),
-            snapshot.percentile(0.5),
-            snapshot.percentile(0.75),
-            snapshot.percentile(0.9),
-            snapshot.percentile(0.95),
-            snapshot.percentile(0.99),
-            snapshot.percentile(0.999),
         )
     }
 }

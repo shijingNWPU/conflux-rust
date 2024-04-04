@@ -127,6 +127,7 @@ pub struct TransactionDigests {
 impl Handleable for TransactionDigests {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         {
+            info!("Receive msg from TransactionDigests");
             let peer_info = ctx.manager.syn.get_peer_info(&ctx.node_id)?;
 
             let mut peer_info = peer_info.write();
@@ -567,7 +568,6 @@ pub struct GetTransactionsResponse {
 
 impl Handleable for GetTransactionsResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        info!("Receive msg from GetTransactionsResponse."); //收交易
         let _timer = MeterTimer::time_func(TX_HANDLE_TIMER.as_ref());
 
         debug!("on_get_transactions_response {:?}", self.request_id);
@@ -586,6 +586,10 @@ impl Handleable for GetTransactionsResponse {
             self.tx_hashes.len(),
             ctx.node_id
         );
+
+        for tx in self.transactions.clone() {
+            info!("Receive msg from GetTransactionsResponse. tx:{:?}", tx.hash());
+        }
 
         // The transaction pool will rely on the execution state information to
         // verify transaction validity. It may incorrectly accept/reject

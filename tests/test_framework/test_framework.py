@@ -176,7 +176,7 @@ class ConfluxTestFramework:
         parser.add_argument(
             "--port-min",
             dest="port_min",
-            default=11000,
+            default=15000,
             type=int)
         self.add_options(parser)
         self.options = parser.parse_args()
@@ -291,6 +291,11 @@ class ConfluxTestFramework:
 
     def setup_chain(self):
         """Override this method to customize blockchain setup"""
+
+        file = open("file.txt", "w")
+        file.write(self.options.tmpdir)
+        file.close()
+
         self.log.info("Initializing test directory " + self.options.tmpdir)
         self._initialize_chain_clean()
 

@@ -13,11 +13,12 @@ use crate::{
         Error,
     },
 };
-use cfx_types::H256;
+use cfx_types::{H256, U256};
 use metrics::MeterTimer;
 use primitives::{block::CompactBlock, Block};
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::collections::HashSet;
+use std::{cmp, collections::HashSet};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
 pub struct GetCompactBlocksResponse {
@@ -119,11 +120,15 @@ impl Handleable for GetCompactBlocksResponse {
                 // The block remains inflight.
                 requested_except_inflight_txn.remove(&hash);
             } else {
+                if cmpct.reconstructed_txns.len() != 0 {
+                    info!("[performance testing] receive block hash:{:?} timestamp:{:?}", cmpct.hash(), SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos());
+                }
+
                 let trans = cmpct
                     .reconstructed_txns
                     .into_iter()
                     .map(|tx| tx.unwrap())
-                    .collect();
+                    .collect();  
                 let block = Block::new(header, trans);
                 debug!("transaction received by block: ratio=0");
                 debug!(
@@ -132,6 +137,7 @@ impl Handleable for GetCompactBlocksResponse {
                     block.transactions.len(),
                     block.size(),
                 );
+                // shijing: insert block to sync graph
                 let insert_result = ctx.manager.graph.insert_block(
                     block, true,  // need_to_verify
                     true,  // persistent

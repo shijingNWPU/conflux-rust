@@ -29,8 +29,19 @@ use std::{
     cmp::{max, min},
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     slice::Iter,
-    sync::Arc,
+    sync::Arc, time::{self, Instant},
 };
+use metrics::{Histogram, Sample};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+lazy_static! {
+    static ref ORDER_TIME: Arc<dyn Histogram> =
+        Sample::ExpDecay(0.015).register_with_group(
+            "performance testing",
+            "order",
+            1024
+        );
+}
 
 pub struct ConsensusNewBlockHandler {
     conf: ConsensusConfig,
@@ -1276,7 +1287,11 @@ impl ConsensusNewBlockHandler {
                 }
                 let mut u = new;
                 loop {
+                    // shijing: order epoch tx
+                    let start_order_time = Instant::now();
                     inner.compute_blockset_in_own_view_of_epoch(u);
+                    ORDER_TIME.update_since(start_order_time);
+
                     inner.pivot_chain.push(u);
                     inner.set_epoch_number_in_epoch(
                         u,
@@ -1419,6 +1434,8 @@ impl ConsensusNewBlockHandler {
                 // no epochs will be skipped. Starting from
                 // fork_at ensures that any epoch set change will be
                 // overwritten.
+                
+                // shijing: delay excute
                 let start_pivot_index = if old_pivot_chain_len
                     >= EPOCH_SET_PERSISTENCE_DELAY as usize
                 {
@@ -1676,6 +1693,7 @@ impl ConsensusNewBlockHandler {
                 let reward_execution_info = self
                     .executor
                     .get_reward_execution_info(inner, epoch_arena_index);
+                // shijing: ordered graph to excuted graph. ??? input ordered tx; excute tx
                 self.executor.enqueue_epoch(EpochExecutionTask::new(
                     epoch_arena_index,
                     inner,
@@ -1696,6 +1714,7 @@ impl ConsensusNewBlockHandler {
     }
 
     /// The top level function invoked by ConsensusGraph to insert a new block.
+    /// shijing: get pv and order blocks
     pub fn on_new_block(
         &self, inner: &mut ConsensusGraphInner, meter: &ConfirmationMeter,
         hash: &H256,
@@ -1763,6 +1782,7 @@ impl ConsensusNewBlockHandler {
                 // For out-of-era blocks, we just fetch the results from the
                 // already filled field. We do not run
                 // preactivate_block() on them.
+                // shijing: preactivate_block?
                 let block_status = if inner.arena[me].era_block != NULL {
                     self.preactivate_block(inner, me)
                 } else {
@@ -1802,6 +1822,9 @@ impl ConsensusNewBlockHandler {
                             me, inner.arena[me].hash
                         );
                     }
+
+                    info!("[performance testing] Waiting finished. block hash:{:?} timestamp:{:?}", inner.arena[me].hash, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos());
+                    // shijing: delay block （inner.arena[me]？）
                     self.activate_block(inner, me, meter, &mut queue);
                 }
                 // Now we are going to check all invalid blocks in the delay

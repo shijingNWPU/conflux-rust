@@ -90,7 +90,10 @@ impl Request for GetBlocks {
 
 impl GetBlocks {
     fn get_blocks(&self, ctx: &Context, with_public: bool) -> Vec<Block> {
-        debug!("Received GetBlocks: {:?}", self);
+        for hash in self.hashes.clone(){
+            debug!("Received GetBlocks: {:?}", hash);
+        }
+
         let mut blocks = Vec::new();
         let mut packet_size_left = MAX_PACKET_SIZE;
 

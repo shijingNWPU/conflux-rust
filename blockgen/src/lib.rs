@@ -29,13 +29,28 @@ use std::{
         mpsc::{self, TryRecvError},
         Arc,
     },
-    thread, time,
+    thread, time::{self, Instant},
 };
 use time::{Duration, SystemTime, UNIX_EPOCH};
 use txgen::SharedTransactionGenerator;
+use metrics::{Histogram, Sample};
+
 lazy_static! {
     static ref PACKED_ACCOUNT_SIZE: Arc<dyn Gauge<usize>> =
         GaugeUsize::register_with_group("txpool", "packed_account_size");
+    
+    static ref CHOOSE_PARENTS_TIME: Arc<dyn Histogram> =
+        Sample::ExpDecay(0.015).register_with_group(
+            "performance testing",
+            "choose_parents",
+            1024
+        );
+    static ref POW_TIME: Arc<dyn Histogram> =
+        Sample::ExpDecay(0.015).register_with_group(
+            "performance testing",
+            "pow",
+            1024
+        );
 }
 
 /// This determined the frequency of checking a new PoW problem.
@@ -115,6 +130,7 @@ impl Worker {
                             let hash = bg_pow.compute(&nonce_u256, &block_hash, block_height);
                             if ProofOfWorkProblem::validate_hash_against_boundary(&hash, &nonce_u256, &boundary) {
                                 // problem solved
+                                info!("problem solved!");
                                 match solution_sender
                                     .send(ProofOfWorkSolution { nonce: nonce_u256 })
                                 {
@@ -330,6 +346,8 @@ impl BlockGenerator {
     ) -> Block {
         let consensus_graph = self.consensus_graph();
 
+        let start_parents_time = Instant::now();
+        
         let (best_info, block_gas_limit, transactions) =
             self.txpool.get_best_info_with_packed_transactions(
                 num_txs,
@@ -337,6 +355,10 @@ impl BlockGenerator {
                 additional_transactions,
             );
 
+        if transactions.len() != 0 {
+            CHOOSE_PARENTS_TIME.update_since(start_parents_time);
+        }
+        
         let mut sender_accounts = HashSet::new();
         for tx in &transactions {
             let tx_hash = tx.hash();
@@ -702,7 +724,9 @@ impl BlockGenerator {
     }
 
     pub fn start_mining(bg: Arc<BlockGenerator>, _payload_len: u32) {
+        thread::sleep(Duration::from_secs(10));
         info!("start_mining.");
+        
         let mut current_mining_block = None;
         let mut recent_mining_blocks = vec![];
         let mut recent_mining_problems = vec![];
@@ -725,6 +749,7 @@ impl BlockGenerator {
                 _ => {}
             }
 
+            let start_pow_time = Instant::now();
             if bg.is_mining_block_outdated(
                 current_mining_block.as_ref(),
                 &last_assemble,
@@ -735,11 +760,25 @@ impl BlockGenerator {
                     continue;
                 }
 
+                info!("block max size:{:?}", bg.graph.verification_config.max_block_size_in_bytes);
+
                 current_mining_block = Some(bg.assemble_new_block(
                     MAX_TRANSACTION_COUNT_PER_BLOCK,
                     bg.graph.verification_config.max_block_size_in_bytes,
                     vec![],
                 ));
+
+                match current_mining_block {
+                    Some(ref mut block) => {
+                        if block.transactions.len() != 0 {
+                            // block.block_header.set_gas_limit(U256([0, 0, 0, 0x40000000]));
+                            info!("block.transactions:{:?}", block.transactions);
+                            info!("block:{:?}", block);
+                        }   
+                    }
+                    None => {  }
+                }
+                
 
                 if recent_mining_blocks.len()
                     == bg.pow_config.pow_problem_window_size
@@ -816,7 +855,17 @@ impl BlockGenerator {
                     let mut mined_block = maybe_mined_block.unwrap();
                     mined_block.block_header.set_nonce(solution.nonce);
                     mined_block.block_header.compute_hash();
+                    mined_block.block_header.gas_limit();
+                    
+                    info!("get mined_block:{:?}", mined_block);
+                    // only for performance testing
+                    if mined_block.transactions.len() != 0 { 
+                        //mined_block.block_header.set_gas_limit(U256([0, 0, 0, 0x40000000]));
+                        POW_TIME.update_since(start_pow_time);
+                    }
+
                     bg.on_mined_block(mined_block);
+                    
                     current_mining_block = None;
                     current_problem = None;
                 } else {

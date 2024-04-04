@@ -670,7 +670,6 @@ impl Encodable for TransactionWithSignatureSerializePart {
 
 impl Decodable for TransactionWithSignatureSerializePart {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        info!("TransactionWithSignatureSerializePart. rlp.item_count(){:?}", rlp.item_count()?);
         
         match rlp.item_count()? {
             3 => {
