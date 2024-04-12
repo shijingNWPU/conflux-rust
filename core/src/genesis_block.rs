@@ -50,6 +50,7 @@ use cfx_executor::{
 use cfx_vm_types::{CreateContractAddress, Env};
 use diem_types::account_address::AccountAddress;
 use primitives::transaction::NativeTransaction;
+use cfxkey::public_quantum_to_address;
 
 pub fn default(dev_or_test_mode: bool) -> HashMap<AddressWithSpace, U256> {
     if !dev_or_test_mode {
@@ -90,10 +91,23 @@ pub fn load_secrets_file(
             )
         })?;
     for line in buffered.lines() {
-        let keypair =
-            KeyPair::from_secret(line.unwrap().parse().unwrap()).unwrap();
-        accounts.insert(keypair.address().with_native_space(), balance.clone());
-        secret_store.insert(keypair);
+        let mut line_string = line.unwrap();
+        if line_string.starts_with("quantum:") {
+            let public_string = line_string["quantum:".len()..].to_string();
+            let bytes: Result<Vec<u8>, _> = (0..public_string.len())
+                .step_by(2)
+                .map(|i| u8::from_str_radix(&public_string[i..i+2], 16))
+                .collect();
+
+            let address = public_quantum_to_address(&bytes.unwrap());
+            accounts.insert(address.with_native_space(), balance.clone());
+        }else {
+            let keypair =
+            KeyPair::from_secret(line_string.parse().unwrap()).unwrap();
+            accounts.insert(keypair.address().with_native_space(), balance.clone());
+            secret_store.insert(keypair);
+        }
+
     }
     Ok(accounts)
 }

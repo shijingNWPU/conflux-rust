@@ -14,6 +14,7 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import assert_equal, connect_nodes, get_peer_addr, wait_until, WaitHandler, \
     initialize_datadir, PortMin, get_datadir_path, connect_sample_nodes, sync_blocks
 from test_framework.blocktools import wait_for_initial_nonce_for_address
+import random
 
 
 class SignTest(ConfluxTestFramework): 
@@ -65,6 +66,10 @@ class SignTest(ConfluxTestFramework):
         
         self._test_stop()
 
+    def set_genesis_secrets(self):
+        genesis_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "./sign_secrets.txt")
+        self.conf_parameters["genesis_secrets"] = f"\"{genesis_file_path}\""
+
     def set_mining(self, node_index):
         if node_index == 1 :
             self.mining_author = "0x10000000000000000000000000000000000000aa"
@@ -81,6 +86,7 @@ class SignTest(ConfluxTestFramework):
         self.add_nodes(node_count)
         for node_index in range(node_count):
             self.set_mining(node_index)
+            self.set_genesis_secrets()
             initialize_datadir(self.options.tmpdir, node_index, PortMin.n, self.conf_parameters)
             self.start_node(node_index, phase_to_wait=None)
 
@@ -121,16 +127,29 @@ class SignTest(ConfluxTestFramework):
         address = get_sign_address()
         
         tx = self.get_transaction()
-        tx["nonce"] = self.get_nonce(address)
+        current_nonce = self.get_nonce(address)
+        tx["nonce"] = current_nonce
+
 
 
         # method_name = "test_quantum_sign"
         method_name = "test_sign"
         method = getattr(obj, "test_sign")
         self.log.info("TestSignTx" + "." + method_name)
-        method(tx, address)
 
-        # test whether tx is in other nodes' pool 
+        for i in range(0,1):
+            method(tx, address)
+            current_nonce = current_nonce + 1
+            tx["nonce"] = current_nonce 
+            
+        # for i in range(0, 10):
+        #     tx["value"] = random.randint(0, 20)
+        #     print("sign test tx:", tx)
+        #     method(tx, address)
+
+        # last check whether tx is in other nodes' pool 
+
+        time.sleep(10)
         method_name = "test_sign_tx_in_pool"
         method_for_node1 = getattr(obj_other_nodes_1, method_name)
         self.log.info("Test whether tx is in other nodes' pool")
@@ -165,15 +184,19 @@ class SignTest(ConfluxTestFramework):
         # 封装tx
         get_quantum_address = getattr(obj, "get_quantum_address")
         address = get_quantum_address()
-        
+        # tx_list
         tx = self.get_transaction()
-        tx["nonce"] = self.get_nonce(address)
+        current_nonce = self.get_nonce(address)
+        tx["nonce"] = current_nonce
 
         method_name = "test_quantum_sign"
         # method_name = "test_sign"
         method = getattr(obj, method_name)
         self.log.info("TestSignTx" + "." + method_name)
-        method(tx, address)
+        for i in range(0,9):
+            method(tx, address)
+            current_nonce = current_nonce + 1
+            tx["nonce"] = current_nonce 
 
         # test whether tx is in other nodes' pool 
         method_name = "test_sign_tx_in_pool"

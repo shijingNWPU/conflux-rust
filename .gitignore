@@ -18,3 +18,5 @@ build_clippy/
 *~
 .DS_Store
 tests/artifacts/**/*.dbg.json
+*.txt
+tests/file.txt

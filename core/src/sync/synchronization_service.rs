@@ -102,7 +102,7 @@ impl SynchronizationService {
         let hash = block.hash();
         
         if block.transactions.len() != 0 {
-            info!("[performance testing] block hash:{:?} timestamp:{:?}", hash, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos());
+            info!("[performance testing] block hash:{:?}, timestamp:{:?}", hash, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos());
         }
 
         self.protocol_handler.on_mined_block(block.clone());

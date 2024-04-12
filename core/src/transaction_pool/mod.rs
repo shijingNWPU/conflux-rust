@@ -420,12 +420,12 @@ impl TransactionPool {
         // key after basic verification.
         //info!("self.data_man.recover_unsigned_tx:{:?}", self.data_man.recover_unsigned_tx(&transactions));
         match self.data_man.recover_unsigned_tx(&transactions) {
-            Ok(signed_trans) => {           
+            Ok(signed_trans) => {       
                 let account_cache = self.get_best_state_account_cache();
                 let mut inner =
                     self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
                 let mut to_prop = self.to_propagate_trans.write();
-
+   
                 for tx in signed_trans {
                     if inner.get(&tx.hash).is_none() {
                         if let Err(e) = self

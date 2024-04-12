@@ -14,12 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::secret;
+
 use super::{Address, Error, Public, Secret, SECP256K1};
 use cfx_types::{address_util::AddressUtil, H512};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parity_crypto::Keccak256 as _;
+use rand::AsByteSliceMut;
 use secp256k1::key;
-use std::fmt;
+use std::{array, convert::TryInto, fmt};
 
 pub fn public_to_address(public: &Public, type_nibble: bool) -> Address {
     let hash = public.keccak256();
@@ -34,11 +37,21 @@ pub fn public_to_address(public: &Public, type_nibble: bool) -> Address {
 }
 
 pub fn public_quantum_to_address(public: &Vec<u8>) -> Address {
-    let hash = public.keccak256();
-    let mut result = Address::zero();
-    result.as_bytes_mut().copy_from_slice(&hash[12..]);
-    result.set_user_account_type_bits();
-    result
+    // cut public
+    let mut public_vec = [0u8; 20];
+    let len = public.len().min(20);
+    public_vec[..len].copy_from_slice(&public[..len]);
+    
+    let hex_string = public_vec.iter().map(|byte| format!("{:02x}", byte)).collect::<String>();
+    info!("hex_string:{:?}", hex_string);
+    
+    info!("public_vec:{:?}", public_vec);
+    let mut public_h512 = H512::zero();
+    public_h512.as_bytes_mut()[..public_vec.len()].copy_from_slice(&public_vec);
+    info!("public_h512:{:?}", public_h512);
+
+    return public_to_address(&public_h512, true);
+    
 }
 
 pub fn get_quantum_public(public: &Vec<u8>) -> H512 {
