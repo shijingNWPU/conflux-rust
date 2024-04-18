@@ -15,7 +15,18 @@ from test_framework.util import assert_equal, connect_nodes, get_peer_addr, wait
     initialize_datadir, PortMin, get_datadir_path, connect_sample_nodes, sync_blocks
 from test_framework.blocktools import wait_for_initial_nonce_for_address
 import random
+from cfx_account.account import (
+    Account
+)
+import threading
+from cfx_address.utils import public_key_to_cfx_hex
+import pprint
+from conflux_web3 import Web3
+from solcx import install_solc, compile_source
 
+
+ACCOUNT_NUM = 20
+TX_NUM_FOR_ACCOUNT = 50
 
 class SignTest(ConfluxTestFramework): 
     def __init__(self):
@@ -62,12 +73,12 @@ class SignTest(ConfluxTestFramework):
         self._test_sign()
         # self._test_quantum_sign()
 
-        time.sleep(5)
+        time.sleep(15)
         
         self._test_stop()
 
     def set_genesis_secrets(self):
-        genesis_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "./sign_secrets.txt")
+        genesis_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "conflux_sj/sign_secrets.txt")
         self.conf_parameters["genesis_secrets"] = f"\"{genesis_file_path}\""
 
     def set_mining(self, node_index):
@@ -96,7 +107,82 @@ class SignTest(ConfluxTestFramework):
         sync_blocks(self.nodes)
         for node in self.nodes:
             node.wait_for_recovery(["NormalSyncPhase"], 30)
-            
+
+    def deploy_contract(self):
+        time.sleep(15)
+        w3 = Web3(Web3.HTTPProvider("http://localhost:15025"))
+        
+        # w3.wallet.add_accounts()
+
+        account = Account.from_key(private_key = "0000000000000000000000000000000000000000000000000000000000000001", network_id=10)
+        w3.cfx.default_account = account
+
+        w3.cfx.get_balance(account.address).to("CFX")
+
+        # 读取合约源代码文件
+        with open("sign_contract.sol", "r") as file:
+            source_code = file.read()
+
+        metadata = compile_source(
+                    source_code,
+                    output_values=['abi', 'bin'],
+                    solc_version=install_solc(version="0.8.13")
+                ).popitem()[1]
+        factory = w3.cfx.contract(abi=metadata["abi"], bytecode=metadata["bin"])
+
+        # 部署合约
+        tx_receipt = factory.constructor(init_value=0).transact().executed()
+
+        contract_address = tx_receipt["contractCreated"]
+        assert contract_address is not None
+        # print(f"contract deployed: {contract_address}")
+
+        # 使用address参数初始化合约，这样我们可以调用该对象的链上接口
+        deployed_contract = w3.cfx.contract(address=contract_address, abi=metadata["abi"])
+
+        account_list = []
+        current_path = os.path.abspath(os.path.dirname(__file__))
+        with open(current_path + '/conflux_sj/sign_secrets.txt', 'r') as file:
+            file.readline()
+            for line in file:
+                private_key = line.strip()
+                account = Account.from_key(private_key = private_key, network_id=10)
+                w3.wallet.add_account(account)
+                account_list.append(account.address)
+        # w3.wallet.add_accounts(account_list)
+
+        print("w3.wallet.accounts:", account_list)
+
+        tx_hash = deployed_contract.functions.multiTransfer().transact(
+            {
+                "value" : 10**18,
+                "from": account_list[0],
+            }
+        )
+
+        return deployed_contract
+
+    def sign_task(self, address, obj, key, method_name, secrete_key):
+        print("\nmethod_name:", method_name)
+        # method_name = "test_sign"
+        method = getattr(obj, method_name)
+        self.log.info("TestSignTx" + "." + method_name + "\n\n")
+
+        lambda_val = 0.5
+        
+        for i in range(0,TX_NUM_FOR_ACCOUNT):
+            tx = self.get_transaction()
+            current_nonce = self.get_nonce(address)
+            tx["nonce"] = current_nonce
+
+            print("addresss tx:", tx)
+            # wait_time = random.expovariate(lambda_val)
+            # time.sleep(wait_time)
+            if method_name == "test_sign":
+                method(tx, key)
+            else:
+                method(tx, address, key, secrete_key)
+
     def _test_sign(self):
         module_name = "test_sign"
         module = __import__("rpc." + module_name, fromlist=True)
@@ -115,46 +201,89 @@ class SignTest(ConfluxTestFramework):
             os.remove(os.path.join(self.options.tmpdir, f))
         shutil.rmtree(os.path.join(self.options.tmpdir, "private_keys"))
 
+
+        # generate accounts
+        sec_key_list = self.generate_curve_accounts(ACCOUNT_NUM)
+        
+        # copy to sign_secrets.txt
+        current_path = os.path.abspath(os.path.dirname(__file__))
+        with open(current_path + '/conflux_sj/sign_secrets.txt', 'w') as file:
+            for sec_key in sec_key_list:
+                file.write(sec_key + '\n')
+
         # start three new nodes and only one execute test method
         self.start_network(3)
 
+        # deploy a contract
+        deployed_contract = self.deploy_contract()
+
+        # 1 to n 
+        tx_hash = deployed_contract.functions.multiTransfer().transact(
+            {
+                "value" : 10**18,
+                #"from": "",
+            }
+        )
+        print(tx_hash)
+
+        '''
         obj = obj_type(self.nodes[0]) # 用其中一个节点的客户端构建交易
         obj_other_nodes_1 = obj_type_other_nodes(self.nodes[1])
         obj_other_nodes_2 = obj_type_other_nodes(self.nodes[2])
         
-        # 封装tx
-        get_sign_address = getattr(obj, "get_sign_address")
-        address = get_sign_address()
-        
-        tx = self.get_transaction()
-        current_nonce = self.get_nonce(address)
-        tx["nonce"] = current_nonce
+        current_path = os.path.abspath(os.path.dirname(__file__))
+        with open(current_path + '/conflux_sj/sign_secrets.txt', 'r') as file:
+            lines = file.readlines()
 
-
-
-        # method_name = "test_quantum_sign"
-        method_name = "test_sign"
-        method = getattr(obj, "test_sign")
-        self.log.info("TestSignTx" + "." + method_name)
-
-        for i in range(0,1):
-            method(tx, address)
-            current_nonce = current_nonce + 1
-            tx["nonce"] = current_nonce 
+        account_num = len(lines)
+        # address_list key:address, value:private key
+        address_list = {} 
+        for i in range(0, account_num):
+            line = lines[i].strip()
+            if "quantum" in line:
+                continue
+            line = "0x" + line
+            account = Account.from_key(private_key = line)
+            address_list[account.address] = line
             
-        # for i in range(0, 10):
-        #     tx["value"] = random.randint(0, 20)
-        #     print("sign test tx:", tx)
+        print("address_list:", address_list)
+
+        for key, value in address_list.items():
+            thread = threading.Thread(target=self.sign_task, args=(key, obj, value, "test_sign", ""))
+            thread.start()
+ 
+        # 封装tx
+        # get transfer account's address
+        # get_sign_address = getattr(obj, "get_sign_address")
+        # address = get_sign_address("curve", "0x46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f")
+        
+        # tx = self.get_transaction()
+        # current_nonce = self.get_nonce(address)
+        # tx["nonce"] = current_nonce
+
+
+        # method_name = "test_sign"
+        # method = getattr(obj, "test_sign")
+        # self.log.info("TestSignTx" + "." + method_name)
+
+        # lambda_val = 0.5
+        # for i in range(0,1):
+        #     wait_time = random.expovariate(lambda_val)
+        #     time.sleep(wait_time)
+
         #     method(tx, address)
+        #     current_nonce = current_nonce + 1
+        #     tx["nonce"] = current_nonce 
+            
+        thread.join()
 
         # last check whether tx is in other nodes' pool 
-
-        time.sleep(10)
         method_name = "test_sign_tx_in_pool"
         method_for_node1 = getattr(obj_other_nodes_1, method_name)
         self.log.info("Test whether tx is in other nodes' pool")
         self.log.info("TestPool" + "." + method_name + " for node1")
         method_for_node1()
+        '''
 
     def _test_quantum_sign(self):
         module_name = "test_sign"
@@ -174,29 +303,78 @@ class SignTest(ConfluxTestFramework):
             os.remove(os.path.join(self.options.tmpdir, f))
         shutil.rmtree(os.path.join(self.options.tmpdir, "private_keys"))
 
+
+
+        # generate accounts
+        key_list = self.generate_quantum_accounts(ACCOUNT_NUM)
+
+        # copy to sign_secrets.txt
+        ps_keys_list = {}
+        current_path = os.path.abspath(os.path.dirname(__file__))
+
+        with open(current_path + '/conflux_sj/sign_secrets.txt', 'w') as file:
+            for key in key_list:            
+                file.write("quantum:" + key[0])  
+                file.write('\n') 
+
+                ps_keys_list[key[0]] = key[1]
+        
+
         # start three new nodes and only one execute test method
         self.start_network(3)
 
         obj = obj_type(self.nodes[0]) # 用其中一个节点的客户端构建交易
         obj_other_nodes_1 = obj_type_other_nodes(self.nodes[1])
         obj_other_nodes_2 = obj_type_other_nodes(self.nodes[2])
-        
-        # 封装tx
-        get_quantum_address = getattr(obj, "get_quantum_address")
-        address = get_quantum_address()
-        # tx_list
-        tx = self.get_transaction()
-        current_nonce = self.get_nonce(address)
-        tx["nonce"] = current_nonce
 
-        method_name = "test_quantum_sign"
-        # method_name = "test_sign"
-        method = getattr(obj, method_name)
-        self.log.info("TestSignTx" + "." + method_name)
-        for i in range(0,9):
-            method(tx, address)
-            current_nonce = current_nonce + 1
-            tx["nonce"] = current_nonce 
+        current_path = os.path.abspath(os.path.dirname(__file__))     
+        with open(current_path + "/conflux_sj/sign_secrets.txt", 'r') as file:
+            lines = file.readlines()
+        
+        account_num = len(lines)
+        address_list = {} 
+        for i in range(0, account_num):
+            line = lines[i].strip()
+            if "quantum" not in line:
+                continue
+            # line = "0x" + line
+            line = line.replace("quantum:", "")
+            account = public_key_to_cfx_hex("0x" + line[0:40])
+            print("account:", account)
+            address_list[account] = line
+         
+        # print("address_list:", address_list)
+        # print("ps_keys_list:", ps_keys_list)
+    
+        for address, pub_key in address_list.items():
+            pub_key = pub_key.replace("0x", "")
+            if pub_key in ps_keys_list.keys():
+                secrete_key = ps_keys_list[pub_key]
+            else:
+                secrete_key = ""
+
+            # print("secrete_key:", secrete_key)
+            thread = threading.Thread(target=self.sign_task, args=(address, obj, pub_key, "test_quantum_sign", secrete_key))
+            thread.start()
+        
+        # # 封装tx
+        # get_quantum_address = getattr(obj, "get_quantum_address")
+        # address = get_quantum_address()
+        # # tx_list
+        # tx = self.get_transaction()
+        # current_nonce = self.get_nonce(address)
+        # tx["nonce"] = current_nonce
+
+        # method_name = "test_quantum_sign"
+        # # method_name = "test_sign"
+        # method = getattr(obj, method_name)
+        # self.log.info("TestSignTx" + "." + method_name)
+        # for i in range(0,9):
+        #     method(tx, address)
+        #     current_nonce = current_nonce + 1
+        #     tx["nonce"] = current_nonce
+
+        thread.join()
 
         # test whether tx is in other nodes' pool 
         method_name = "test_sign_tx_in_pool"
@@ -205,6 +383,18 @@ class SignTest(ConfluxTestFramework):
         self.log.info("TestPool" + "." + method_name + " for node1")
         method_for_node1()
 
+    def generate_quantum_accounts(self, account_num):
+        account_list = []
+        for i in range(0, account_num):
+            account_list.append(Account.get_key_pair_post_quantum())
+        return account_list
+
+    def generate_curve_accounts(self, account_num):
+        account_list = []
+        for i in range(1, account_num + 1):
+            account = format(i, '064x')  # 将数字转换为十六进制字符串，总长度为 64
+            account_list.append(account)
+        return account_list
 
     # def _test_addlatency(self):
     #     def on_block_headers(node, _):

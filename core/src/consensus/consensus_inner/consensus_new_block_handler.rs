@@ -1111,6 +1111,7 @@ impl ConsensusNewBlockHandler {
         &self, inner: &mut ConsensusGraphInner, me: usize,
         meter: &ConfirmationMeter, queue: &mut VecDeque<usize>,
     ) {
+        info!("activate_block");
         inner.arena[me].data.activated = true;
         self.statistics.inc_consensus_graph_activated_block_count();
         let mut succ_list = inner.arena[me].children.clone();
@@ -1224,6 +1225,7 @@ impl ConsensusNewBlockHandler {
         let force_height = inner.arena[force_confirm].height;
         let last = inner.pivot_chain.last().cloned().unwrap();
         let force_lca = inner.lca(force_confirm, last);
+        info!("force_lca == force_confirm:{:?} inner.arena[me].parent == last{:?}", force_lca == force_confirm, inner.arena[me].parent == last);
 
         if force_lca == force_confirm && inner.arena[me].parent == last {
             inner.pivot_chain.push(me);
@@ -1273,6 +1275,7 @@ impl ConsensusNewBlockHandler {
                     fork_at = inner.pivot_index_to_height(old_pivot_chain_len);
                 }
             }
+            
             if pivot_changed {
                 // The new subtree is heavier, update pivot chain
                 let fork_pivot_index = inner.height_to_pivot_index(fork_at);
@@ -1341,6 +1344,7 @@ impl ConsensusNewBlockHandler {
         // Now compute last_pivot_in_block and update pivot_metadata.
         // Note that we need to do this for partially invalid blocks to
         // propagate information!
+        info!("extend_pivot");
         if !extend_pivot {
             let update_at = fork_at - 1;
             let mut last_pivot_to_update = HashSet::new();

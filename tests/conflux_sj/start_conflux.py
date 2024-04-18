@@ -2,6 +2,7 @@ import subprocess
 import time
 import re
 import os
+import threading
 
 def do_experiment():
     command = "nohup /home/shijing/python3.10_dir/bin/python3.10 /home/shijing/conflux_master/conflux-rust/tests/sign_test.py >> output.txt 2>&1 &"
@@ -15,11 +16,17 @@ def get_tmpdir():
 
 def get_client():
     with open("file.txt", "r") as file:
-        content = file.read()
-    index = content.find("【performance】sign:")
-    if index != -1:
-        sign_time = content[index + len("【performance】sign:"):]
-    return sign_time
+        lines = file.readlines()
+    
+        sign_times = []
+        for line in lines:
+            line = line.strip()
+            index = line.find("【performance】sign:")
+            if index != -1:
+                sign_time = line[index + len("【performance】sign:"):]
+                sign_times.append(int(sign_time))
+
+        return sum(sign_times) / len(sign_times)
     
 def get_node_metrics(tmpdir, node):
     parsed_data = {}
@@ -113,7 +120,7 @@ def is_exeriment_filished():
     while True:
         if os.path.exists("output.txt") == False:
             continue
-        with open("output.txt", "r") as file:
+        with open("output.txt", "r", encoding='utf-8') as file:
             content = file.read()
             if "Stopping nodes" in content:
                 return 
@@ -129,15 +136,15 @@ def delete_file():
         os.remove("file.txt")
     
 if __name__ == "__main__":
-    delete_file()
+    action = input("Enter action (experiment(e)/metrics(m)): ")
+    if action == "e":
+        delete_file()
+        do_experiment()
+    elif action == "m":
+        tmpdir = get_tmpdir()
+        get_metrics(tmpdir)
 
-    do_experiment()
-    is_exeriment_filished()
 
-    time.sleep(5)
-    tmpdir = get_tmpdir()
-
-    get_metrics(tmpdir)
     # write_excel()
 
 
