@@ -5898,6 +5898,7 @@ dependencies = [
 [[package]]
 name = "rust-dilithium2"
 version = "0.1.0"
+source = "git+https://github.com/shijingNWPU/rust-dilithium2.git?branch=perf-test#b88d72a2072e5c1fffefda0020c5904aa3718cb3"
 dependencies = [
  "bindgen 0.65.1",
  "cc",
