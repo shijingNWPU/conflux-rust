@@ -12,7 +12,7 @@ from conflux.address import hex_to_b32_address
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal, assert_raises_rpc_error, assert_is_hash_string
 
-sys.path.append("../../../cfx-account")
+sys.path.append("/home/ubuntu/cfx-account")
 from cfx_account._utils.transactions import serializable_unsigned_transaction_from_dict
 from cfx_address.utils import public_key_to_cfx_hex
 import binascii
