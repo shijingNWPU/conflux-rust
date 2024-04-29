@@ -221,7 +221,8 @@ pub mod block {
     // graph. Otherwise, it will be queued at the synchronization layer.
     pub const ACCEPTABLE_TIME_DRIFT: u64 = 5 * 60;
     // FIXME: a block generator parameter only. We should remove this later
-    pub const MAX_TRANSACTION_COUNT_PER_BLOCK: usize = 20000;
+    // pub const MAX_TRANSACTION_COUNT_PER_BLOCK: usize = 20000;
+    pub const MAX_TRANSACTION_COUNT_PER_BLOCK: usize = 10;
     pub const DEFAULT_TARGET_BLOCK_GAS_LIMIT: u64 = GENESIS_GAS_LIMIT;
     // The following parameter controls how many blocks are allowed to
     // contain EVM Space transactions. Setting it to N means that one block
