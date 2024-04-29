@@ -21,7 +21,7 @@ from cfx_account.account import (
     Account
 )
 
-
+sign_time_list = []
 
 class TestSignTx(RpcClient):
     def test_quantum_sign(self, transaction, addrssss, pub_key, sec_key):
@@ -65,14 +65,17 @@ class TestSignTx(RpcClient):
         file.close()
 
         print("【performance】sign:", time.perf_counter_ns() - start_sign_time )
-        print("-----------------------\nbefore: self.check_tx_in_pool():", self.check_tx_in_pool())
+        sign_time_list.append(time.perf_counter_ns() - start_sign_time)
+        print("sign_time_list avg:",sum(sign_time_list)/len(sign_time_list))
+        
+        # print("-----------------------\nbefore: self.check_tx_in_pool():", self.check_tx_in_pool())
         # print("signed_tx.rawTransaction.hex():", signed_tx.rawTransaction.hex())
     
         self.send_raw_tx( signed_tx.rawTransaction.hex() )
 
         # assert_raises_rpc_error(None, None, self.send_raw_tx, signed_tx.rawTransaction.hex())
 
-        print("-----------------------\nafter: self.check_tx_in_pool():", self.check_tx_in_pool())
+        # print("-----------------------\nafter: self.check_tx_in_pool():", self.check_tx_in_pool())
 
 
         # while True:

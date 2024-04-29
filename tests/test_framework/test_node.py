@@ -237,7 +237,7 @@ class TestNode:
         max_retry = wait_time / sleep_time
 
         while self.current_sync_phase() not in phases and retry <= max_retry:
-            time.sleep(0.1)
+            time.sleep(1)
             retry += 1
 
         if retry > max_retry:

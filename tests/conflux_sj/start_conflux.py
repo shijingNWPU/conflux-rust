@@ -4,13 +4,14 @@ import re
 import os
 import threading
 
+# ~/conflux-rust/tests/conflux_sj$ python3 start_conflux.py 
 def do_experiment():
     command = "nohup /home/shijing/python3.10_dir/bin/python3.10 /home/shijing/conflux_master/conflux-rust/tests/sign_test.py >> output.txt 2>&1 &"
     subprocess.run(command, shell=True)
     
 
-def get_tmpdir():
-    with open("file.txt", "r") as file:
+def get_tmpdir(path_head):
+    with open(path_head + "file.txt", "r") as file:
         tmpdir = file.readline()[:-1]
     return tmpdir
 
@@ -127,6 +128,119 @@ def is_exeriment_filished():
             else:
                 time.sleep(5)
 
+def get_remote_broadcast_time(ips):
+    block_map = {}
+    for ip in ips:
+        with open("./block_" + ip.replace(".", "_") + ".log") as file:
+            lines = file.readlines()
+            for line in lines:
+                if "mining" in line:
+                    block_hash_pattern = r"block hash:(0x\w+)"
+                    block_hash_matches = re.findall(block_hash_pattern, line)
+
+                    time_pattern = r"timestamp:(\d+)"
+                    time_matches = re.findall(time_pattern, line)
+                    if time_matches and block_hash_matches != 0 :
+                        timestamp = time_matches[0]
+                        block_hash = block_hash_matches[0]
+
+                        block_map[block_hash] = [int(timestamp)]
+
+    # get receive time
+    for ip in ips:
+        with open("./block_" + ip.replace(".", "_") + ".log") as file:
+            lines = file.readlines()
+            for line in lines:
+                block_hash_pattern = r'receive block hash:(0x\w+)'
+                block_hash_matches = re.findall(block_hash_pattern, line)
+
+                if len(block_hash_matches) == 0:
+                    continue
+
+                for block_item in block_map:
+                    if block_item[0] in line:
+                        time_pattern = r'timestamp:(\d+)'
+                        time_matches = re.findall(time_pattern, line)
+                        if time_matches:
+                            block_map[block_hash_matches[0]].append(int(time_matches[0]))
+                            break
+    sum = 0
+    for _, value in block_map.items():
+        sum = sum + (max(value) - min(value))
+    
+    print("broadcast time:", sum/len(block_map))
+    return block_map
+
+def get_blockid(line):
+    block_hash_pattern = r"block hash:(0x\w+)"
+    block_hash_matches = re.findall(block_hash_pattern, line)
+    if block_hash_matches:
+        return block_hash_matches[0]
+    else:
+        return ""
+
+def get_timestamp(line):
+    time_pattern = r"timestamp:(\d+)"
+    time_matches = re.findall(time_pattern, line)
+    if time_matches:
+        return int(time_matches[0])
+    else:
+        return 0
+
+def block_id_in_list(block_id, blocks):
+    for block in blocks:
+        if block == block_id:
+            return True
+        else:
+            return False
+
+def get_remote_wait_time(ips, blocks):
+    avg_time_per_ips = []
+    for ip in ips:
+        wait_time_per_ips = {}
+
+        with open("./block_" + ip.replace(".", "_") + ".log") as file:
+            lines = file.readlines()
+            for line in lines:
+                if "Waiting start. " in line:
+                    block_id = get_blockid(line)
+                    if block_id_in_list(block_id, blocks) and get_timestamp(line) != 0:
+                        wait_time_per_ips[block_id] = get_timestamp(line)
+                    
+                if "Waiting finished." in line:
+                    block_id = get_blockid(line) 
+                    if block_id_in_list(block_id, blocks) and get_timestamp(line) !=0 :
+                        wait_time_per_ips[block_id] = get_timestamp(line) - wait_time_per_ips[block_id]
+        
+        avg_time_per_ips.append(sum(wait_time_per_ips.values())/len(wait_time_per_ips.values())) 
+    
+    print("wait time:", sum(avg_time_per_ips)/len(avg_time_per_ips))
+    return sum(avg_time_per_ips)/len(avg_time_per_ips)
+
+def get_remote_metrics():
+    ips = []
+
+    # get remote log
+    with open("../extra-test-toolkits/scripts/ips") as file:
+        lines = file.readlines()
+        for line in lines:
+            ip = line.strip()
+            ips.append(ip)
+
+    for ip in ips:
+        cmd = "scp -r ubuntu@" + ip + ":/home/ubuntu/block.log ./block_" + ip.replace(".", "_") + ".log"
+        ret = os.system(cmd)
+
+    # get broadcast time
+    block_map = get_remote_broadcast_time(ips)
+
+    # get wait time
+    blocks = block_map.keys()
+    get_remote_wait_time(ips, blocks)
+    
+
+
+
 # def write_excel():
 
 def delete_file():
@@ -141,8 +255,11 @@ if __name__ == "__main__":
         delete_file()
         do_experiment()
     elif action == "m":
-        tmpdir = get_tmpdir()
+        tmpdir = get_tmpdir("")
         get_metrics(tmpdir)
+    elif action == "rm":
+        get_remote_metrics()
+
 
 
     # write_excel()
