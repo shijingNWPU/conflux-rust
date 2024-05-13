@@ -3,6 +3,16 @@ import time
 import re
 import os
 import threading
+import datetime
+import arrow
+import pandas as pd
+from collections import OrderedDict
+
+broadcast_avg_map = OrderedDict()
+wait_duration_map = {}
+sign_time_avgduration_dict = {}
+df = pd.DataFrame(columns=['time','check_parents', 'persist', 'broadcast', 'check_pow', 'get_msg', 'pow', 'sign', 'input_selection', 'getParents', 'getInfo', 'waiting', 'order', 'state_update', 'verify_tx'])
+     
 
 # ~/conflux-rust/tests/conflux_sj$ python3 start_conflux.py 
 def do_experiment():
@@ -16,18 +26,39 @@ def get_tmpdir(path_head):
     return tmpdir
 
 def get_client():
-    with open("file.txt", "r") as file:
+    sign_time_durationlist_dict = {}
+
+    with open("../extra-test-toolkits/scripts/file.txt", "r") as file:
+    # with open("file.txt", "r") as file:
         lines = file.readlines()
     
         sign_times = []
         for line in lines:
-            line = line.strip()
-            index = line.find("【performance】sign:")
-            if index != -1:
-                sign_time = line[index + len("【performance】sign:"):]
-                sign_times.append(int(sign_time))
+            if "performance" not in line:
+                continue
+            # 提取日期时间
+            start_index = line.find(":") + 1
+            end_index = line.find("【")
+            datetime_str = line[start_index:end_index].strip()
 
-        return sum(sign_times) / len(sign_times)
+            # 提取性能指标
+            start_index = line.find("sign:") + len("sign:")
+            sign_performance = int(line[start_index:].strip())
+
+            if datetime_str in sign_time_durationlist_dict:
+                sign_time_durationlist_dict[datetime_str].append(sign_performance)
+            else:
+                sign_time_durationlist_dict[datetime_str] = [sign_performance]
+
+        for time, duration_list in sign_time_durationlist_dict.items():
+            avg_duration = sum(duration_list)/len(duration_list)
+            sign_time_avgduration_dict[time] = avg_duration
+
+        all_duration = 0
+        for time, duration in sign_time_avgduration_dict.items():
+            all_duration = all_duration + duration
+
+        return all_duration/len(sign_time_avgduration_dict.keys())
     
 def get_node_metrics(tmpdir, node):
     parsed_data = {}
@@ -129,7 +160,8 @@ def is_exeriment_filished():
                 time.sleep(5)
 
 def get_remote_broadcast_time(ips):
-    block_map = {}
+    block_map = {}  # key: block id  value: times
+    first_time_block_map = {} # key:timestamp value:block list
     for ip in ips:
         with open("./block_" + ip.replace(".", "_") + ".log") as file:
             lines = file.readlines()
@@ -145,6 +177,15 @@ def get_remote_broadcast_time(ips):
                         block_hash = block_hash_matches[0]
 
                         block_map[block_hash] = [int(timestamp)]
+
+                        # update first_time_block_map
+                        timestamp = int(timestamp) / 1000000000  # 将时间戳转换为秒级别（除以10^9）
+                        dt = arrow.Arrow.fromtimestamp(timestamp)
+                        time_formatted = dt.format("YYYY-MM-DD HH:mm:ss")                      
+                        if time_formatted in first_time_block_map:
+                            first_time_block_map[time_formatted].append(block_hash)
+                        else:
+                            first_time_block_map[time_formatted] = [block_hash]
 
     # get receive time
     for ip in ips:
@@ -162,13 +203,31 @@ def get_remote_broadcast_time(ips):
                         time_pattern = r'timestamp:(\d+)'
                         time_matches = re.findall(time_pattern, line)
                         if time_matches:
-                            block_map[block_hash_matches[0]].append(int(time_matches[0]))
-                            break
+                            if block_hash_matches[0] in block_map:
+                                block_map[block_hash_matches[0]].append(int(time_matches[0]))
+                                break
+    
+    
     sum = 0
     for _, value in block_map.items():
         sum = sum + (max(value) - min(value))
     
     print("broadcast time:", sum/len(block_map))
+    
+    # get broadcast_avg_map(for excel)
+
+    for time, blocks in first_time_block_map.items():
+        tmp_time = 0
+        for block in blocks:
+            # time
+            tmp_time = tmp_time + (max(block_map[block]) - min(block_map[block]))
+        
+        # broadcast_avg_map[time] = tmp_time/len(blocks)
+        # broadcast_avg_map.append([time, tmp_time/len(blocks)])
+        broadcast_avg_map[time] = tmp_time/len(blocks)
+
+    print("broadcast_avg_map:", broadcast_avg_map)
+
     return block_map
 
 def get_blockid(line):
@@ -195,6 +254,9 @@ def block_id_in_list(block_id, blocks):
             return False
 
 def get_remote_wait_time(ips, blocks):
+
+    start_blockid_map = {}
+
     avg_time_per_ips = []
     for ip in ips:
         wait_time_per_ips = {}
@@ -204,18 +266,126 @@ def get_remote_wait_time(ips, blocks):
             for line in lines:
                 if "Waiting start. " in line:
                     block_id = get_blockid(line)
-                    if block_id_in_list(block_id, blocks) and get_timestamp(line) != 0:
+                    if get_timestamp(line) != 0:
                         wait_time_per_ips[block_id] = get_timestamp(line)
                     
                 if "Waiting finished." in line:
                     block_id = get_blockid(line) 
-                    if block_id_in_list(block_id, blocks) and get_timestamp(line) !=0 :
+                    if get_timestamp(line) !=0 and block_id in wait_time_per_ips:
                         wait_time_per_ips[block_id] = get_timestamp(line) - wait_time_per_ips[block_id]
+
+
+                        timestamp = int(get_timestamp(line)) / 1000000000
+                        dt = arrow.Arrow.fromtimestamp(timestamp)
+                        datetime_formatted = dt.format("YYYY-MM-DD HH:mm:ss")
+                        if datetime_formatted in start_blockid_map:
+                            start_blockid_map[datetime_formatted].append(block_id)
+                        else:
+                            start_blockid_map[datetime_formatted] = [block_id]
+
         
         avg_time_per_ips.append(sum(wait_time_per_ips.values())/len(wait_time_per_ips.values())) 
     
+
+        for start_time, block_ids  in start_blockid_map.items():
+            tmp_duration = 0
+            for block in block_ids:    
+                tmp_duration = tmp_duration + wait_time_per_ips[block]
+
+            if start_time in wait_duration_map:
+                wait_duration_map[start_time] = (wait_duration_map[start_time] + (tmp_duration/len(block_ids))) / 2
+            else: 
+                wait_duration_map[start_time] = tmp_duration/len(block_ids)
+
     print("wait time:", sum(avg_time_per_ips)/len(avg_time_per_ips))
+    
+    print("wait wait_duration_map:", wait_duration_map)
+
     return sum(avg_time_per_ips)/len(avg_time_per_ips)
+
+def get_fill_other_time():
+    global df
+    with open('metrics.log', 'r') as file:
+        lines = file.readlines()
+
+        for line in lines:
+            content = line.strip()
+
+            # 解析时间戳
+            timestamp = int(content.split(',')[0])
+            converted_time = datetime.datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
+
+            # 解析mean值
+            mean_values = {}
+            mean_data = content.split('{')[1].split('}')[0].split(',')
+            for item in mean_data:
+                key, value = item.strip().split(':')
+                mean_values[key.strip()] = float(value.strip())
+            
+            # 输出结果
+            print("转换后的时间：", converted_time)
+            for key, value in mean_values.items():
+                if "mean" in key :
+                    print(f"{key.split('.')[0]}: {value}")
+                    key = key.split('.')[0]
+                    # df[converted_time][key] = value
+                    if key == "pow":
+                        df.loc[df["time"] == converted_time, "pow"] = value
+                    elif key == "nonce_check":
+                        df.loc[df["time"] == converted_time, "check_pow"] = value
+                    elif key == "excution":
+                        df.loc[df["time"] == converted_time, "state_update"] = value
+                    elif key == "check_parents":
+                        df.loc[df["time"] == converted_time, "check_parents"] = value
+                    elif key == "verify_curve_sign":
+                        df.loc[df["time"] == converted_time, "verify_tx"] = value                    
+                    elif key == "choose_parents":
+                        df.loc[df["time"] == converted_time, "getParents"] = value 
+                    elif key == "order":
+                        df.loc[df["time"] == converted_time, "order"] = value 
+                    elif key == "insert_block_head":
+                        if df.loc[df["time"] == converted_time, "persist"].isnull().any():
+                            df.loc[df["time"] == converted_time, "persist"] = value 
+                        else:
+                            df.loc[df["time"] == converted_time, "persist"] = df.loc[df["time"] == converted_time, "persist"] + value 
+                    elif key == "insert_block_body":
+                        if df.loc[df["time"] == converted_time, "persist"].isnull().any():
+                            df.loc[df["time"] == converted_time, "persist"] = value 
+                        else:
+                            df.loc[df["time"] == converted_time, "persist"] = df.loc[df["time"] == converted_time, "persist"] + value 
+
+def fill_sign():
+    global df
+    for target_time, duration in sign_time_avgduration_dict.items():
+        df.loc[df["time"] == target_time, "sign"] = duration
+    
+
+def fill_broadcast():
+    global df
+    first_key = broadcast_avg_map.popitem(last=False)[0]
+    last_key = broadcast_avg_map.popitem(last=True)[0]
+    
+    first_time = pd.to_datetime(first_key)
+    last_time = pd.to_datetime(last_key) 
+
+    current_time = first_time
+    while current_time <= last_time:
+        df = pd.concat([df, pd.DataFrame({'time': [current_time]})], ignore_index=True)
+        current_time = current_time + datetime.timedelta(seconds=1)
+
+    for target_time, duration in broadcast_avg_map.items():
+        df.loc[df["time"] == target_time, "broadcast"] = duration
+
+
+def fill_wait_time():
+    global df
+    for target_time, duration in wait_duration_map.items():
+        df.loc[df["time"] == target_time, "waiting"] = duration
+
+
+# def get_sign_time(ips, blocks):
+#     global df
+#     with open("", "r") as file:
 
 def get_remote_metrics():
     ips = []
@@ -231,12 +401,31 @@ def get_remote_metrics():
         cmd = "scp -r ubuntu@" + ip + ":/home/ubuntu/block.log ./block_" + ip.replace(".", "_") + ".log"
         ret = os.system(cmd)
 
+    cmd = "scp -r ubuntu@" + ips[0] + ":/home/ubuntu/metrics.log ./metrics.log"
+    ret = os.system(cmd)   
+
+
+
     # get broadcast time
+    print("get broadcast time")
     block_map = get_remote_broadcast_time(ips)
+    fill_broadcast()
 
     # get wait time
+    print("get wait time")
     blocks = block_map.keys()
     get_remote_wait_time(ips, blocks)
+    fill_wait_time()
+
+    # get client sign time
+    sign_time = get_client()
+    fill_sign()
+
+    # get other time
+    get_fill_other_time()
+
+    print(df)
+    df.to_csv('total.csv', index=True)
     
 
 

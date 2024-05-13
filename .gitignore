@@ -20,3 +20,4 @@ build_clippy/
 tests/artifacts/**/*.dbg.json
 *.txt
 tests/file.txt
+*.csv
