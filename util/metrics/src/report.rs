@@ -39,7 +39,7 @@ pub fn report_async<R: 'static + Reporter>(reporter: R, interval: Duration) {
     thread::spawn(move || loop {
         // sleep random time on different nodes to reduce competition.
         thread::sleep(
-            interval.mul_f64(0.5 + rand::thread_rng().gen_range(0.0, 0.3)),
+            interval.mul_f64(0.3 + rand::thread_rng().gen_range(0.0, 0.05)),
         );
 
         let start = Instant::now();
@@ -198,12 +198,13 @@ impl<T: Histogram> Reportable for T {
         //     snapshot.percentile(0.999),
         // )
         format!(
-            "{0}.count: {1}, {0}.min: {2}, {0}.mean: {3:.2}, {0}.max: {4}",
+            "{0}.count: {1}, {0}.min: {2}, {0}.mean: {3:.2}, {0}.max: {4}, {0}.new: {5}",
             name,
             snapshot.count(),
             snapshot.min(),
             snapshot.mean(),
             snapshot.max(),
+            snapshot.newest(),
         )
     }
 }

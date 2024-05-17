@@ -16,6 +16,7 @@ use std::{
 };
 
 pub trait Histogram: Send + Sync {
+    fn newest(&self) -> u64 { 0 }
     fn count(&self) -> usize { 0 }
     fn max(&self) -> u64 { 0 }
     fn mean(&self) -> f64 { 0.0 }
@@ -112,6 +113,14 @@ struct Snapshot {
 }
 
 impl Histogram for Snapshot {
+    fn newest(&self) -> u64 { 
+        if self.values.len() == 0 {
+            return 0
+        }else{
+            return self.values[self.values.len() - 1] 
+        }
+    }
+
     fn count(&self) -> usize { self.count }
 
     fn max(&self) -> u64 { self.values.iter().max().cloned().unwrap_or(0) }

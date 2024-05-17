@@ -8,10 +8,10 @@ import arrow
 import pandas as pd
 from collections import OrderedDict
 
-broadcast_avg_map = OrderedDict()
+broadcast_avg_map = {}
 wait_duration_map = {}
-sign_time_avgduration_dict = {}
-df = pd.DataFrame(columns=['time','check_parents', 'persist', 'broadcast', 'check_pow', 'get_msg', 'pow', 'sign', 'input_selection', 'getParents', 'getInfo', 'waiting', 'order', 'state_update', 'verify_tx'])
+sign_time_avgduration_dict = OrderedDict()
+df = pd.DataFrame(columns=['time', 'threads', 'check_parents', 'persist', 'broadcast', 'check_pow', 'pow', 'sign', 'getParents', 'waiting', 'order', 'state_update', 'verify_tx'])
      
 
 # ~/conflux-rust/tests/conflux_sj$ python3 start_conflux.py 
@@ -224,7 +224,7 @@ def get_remote_broadcast_time(ips):
         
         # broadcast_avg_map[time] = tmp_time/len(blocks)
         # broadcast_avg_map.append([time, tmp_time/len(blocks)])
-        broadcast_avg_map[time] = tmp_time/len(blocks)
+        broadcast_avg_map[time] = round(tmp_time/len(blocks), 5)
 
     print("broadcast_avg_map:", broadcast_avg_map)
 
@@ -293,9 +293,9 @@ def get_remote_wait_time(ips, blocks):
                 tmp_duration = tmp_duration + wait_time_per_ips[block]
 
             if start_time in wait_duration_map:
-                wait_duration_map[start_time] = (wait_duration_map[start_time] + (tmp_duration/len(block_ids))) / 2
+                wait_duration_map[start_time] = round((wait_duration_map[start_time] + (tmp_duration/len(block_ids))) / 2 , 5)
             else: 
-                wait_duration_map[start_time] = tmp_duration/len(block_ids)
+                wait_duration_map[start_time] = round(tmp_duration/len(block_ids), 5)
 
     print("wait time:", sum(avg_time_per_ips)/len(avg_time_per_ips))
     
@@ -323,10 +323,10 @@ def get_fill_other_time():
                 mean_values[key.strip()] = float(value.strip())
             
             # 输出结果
-            print("转换后的时间：", converted_time)
+            # print("转换后的时间：", converted_time)
             for key, value in mean_values.items():
                 if "mean" in key :
-                    print(f"{key.split('.')[0]}: {value}")
+                    # print(f"{key.split('.')[0]}: {value}")
                     key = key.split('.')[0]
                     # df[converted_time][key] = value
                     if key == "pow":
@@ -345,12 +345,12 @@ def get_fill_other_time():
                         df.loc[df["time"] == converted_time, "order"] = value 
                     elif key == "insert_block_head":
                         if df.loc[df["time"] == converted_time, "persist"].isnull().any():
-                            df.loc[df["time"] == converted_time, "persist"] = value 
+                            df.loc[df["time"] == converted_time, "persist"] = round(value, 5) 
                         else:
                             df.loc[df["time"] == converted_time, "persist"] = df.loc[df["time"] == converted_time, "persist"] + value 
                     elif key == "insert_block_body":
                         if df.loc[df["time"] == converted_time, "persist"].isnull().any():
-                            df.loc[df["time"] == converted_time, "persist"] = value 
+                            df.loc[df["time"] == converted_time, "persist"] = round(value, 5)  
                         else:
                             df.loc[df["time"] == converted_time, "persist"] = df.loc[df["time"] == converted_time, "persist"] + value 
 
@@ -362,17 +362,6 @@ def fill_sign():
 
 def fill_broadcast():
     global df
-    first_key = broadcast_avg_map.popitem(last=False)[0]
-    last_key = broadcast_avg_map.popitem(last=True)[0]
-    
-    first_time = pd.to_datetime(first_key)
-    last_time = pd.to_datetime(last_key) 
-
-    current_time = first_time
-    while current_time <= last_time:
-        df = pd.concat([df, pd.DataFrame({'time': [current_time]})], ignore_index=True)
-        current_time = current_time + datetime.timedelta(seconds=1)
-
     for target_time, duration in broadcast_avg_map.items():
         df.loc[df["time"] == target_time, "broadcast"] = duration
 
@@ -383,9 +372,27 @@ def fill_wait_time():
         df.loc[df["time"] == target_time, "waiting"] = duration
 
 
-# def get_sign_time(ips, blocks):
-#     global df
-#     with open("", "r") as file:
+def fill_time():
+    global df
+    first_key = sign_time_avgduration_dict.popitem(last=False)[0]
+    last_key = sign_time_avgduration_dict.popitem(last=True)[0]
+
+    first_time = pd.to_datetime(first_key)
+    last_time = pd.to_datetime(last_key) 
+
+    current_time = first_time
+    while current_time <= last_time:
+        df = pd.concat([df, pd.DataFrame({'time': [current_time]})], ignore_index=True)
+        current_time = current_time + datetime.timedelta(seconds=1)
+    
+    for i in range(0, 20):
+        df = pd.concat([df, pd.DataFrame({'time': [current_time]})], ignore_index=True)
+        current_time = current_time + datetime.timedelta(seconds=1)
+
+    # fill threads num
+
+    print(df)
+
 
 def get_remote_metrics():
     ips = []
@@ -404,7 +411,10 @@ def get_remote_metrics():
     cmd = "scp -r ubuntu@" + ips[0] + ":/home/ubuntu/metrics.log ./metrics.log"
     ret = os.system(cmd)   
 
-
+    # get client sign time
+    sign_time = get_client()
+    fill_time()
+    fill_sign()
 
     # get broadcast time
     print("get broadcast time")
@@ -416,10 +426,6 @@ def get_remote_metrics():
     blocks = block_map.keys()
     get_remote_wait_time(ips, blocks)
     fill_wait_time()
-
-    # get client sign time
-    sign_time = get_client()
-    fill_sign()
 
     # get other time
     get_fill_other_time()

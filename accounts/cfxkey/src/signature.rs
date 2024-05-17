@@ -45,7 +45,8 @@ lazy_static! {
         Sample::ExpDecay(0.015).register_with_group(
             "performance testing",
             "verify_curve_sign",
-            1024
+            //1024
+            3
         );
 }
 

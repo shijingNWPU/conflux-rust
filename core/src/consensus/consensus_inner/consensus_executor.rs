@@ -95,7 +95,8 @@ lazy_static! {
         Sample::ExpDecay(0.015).register_with_group(
             "performance testing",
             "excution",
-            1024
+            //1024
+            3
         );
 }
 

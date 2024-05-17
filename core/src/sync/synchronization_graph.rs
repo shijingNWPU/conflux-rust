@@ -61,20 +61,23 @@ lazy_static! {
         Sample::ExpDecay(0.015).register_with_group(
             "performance testing",
             "insert_block_body",
-            1024
+            //1024
+            3
         );
     static ref INSERT_BLOCK_HEAD_TIME: Arc<dyn Histogram> =
         Sample::ExpDecay(0.015).register_with_group(
             "performance testing",
             "insert_block_head",
-            1024
+            //1024
+            3
         );
         
     static ref NONCE_CHECK_TIME: Arc<dyn Histogram> =
         Sample::ExpDecay(0.015).register_with_group(
             "performance testing",
             "nonce_check",
-            1024
+            //1024
+            3
         );
 }
 
