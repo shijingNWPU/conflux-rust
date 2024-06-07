@@ -8,6 +8,7 @@ use crate::sync::{
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, PartialEq)]
 pub struct NewBlockHashes {
@@ -30,6 +31,12 @@ impl Decodable for NewBlockHashes {
 impl Handleable for NewBlockHashes {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_new_block_hashes, msg={:?}", self);
+        let block_hashes = self.block_hashes.clone();
+        for hash in block_hashes{
+            info!("[performance testing] receive block hash:{:?} timestamp:{:?}", hash, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos());
+        }
+
+           
 
         if ctx.manager.catch_up_mode() {
             // If a node is in catch-up mode and we are not in test-mode, we

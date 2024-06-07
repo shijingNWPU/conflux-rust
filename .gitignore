@@ -21,3 +21,4 @@ tests/artifacts/**/*.dbg.json
 *.txt
 tests/file.txt
 *.csv
+tests/conflux_sj/total.xlsx

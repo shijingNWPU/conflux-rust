@@ -40,7 +40,7 @@ lazy_static! {
             "performance testing",
             "order",
             //1024
-            3
+            10
         );
 }
 

@@ -44,14 +44,14 @@ lazy_static! {
             "performance testing",
             "choose_parents",
             //1024
-            3
+            10
         );
     static ref POW_TIME: Arc<dyn Histogram> =
         Sample::ExpDecay(0.015).register_with_group(
             "performance testing",
             "pow",
             //1024
-            3
+            10
         );
 }
 

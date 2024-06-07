@@ -121,7 +121,8 @@ impl Handleable for GetCompactBlocksResponse {
                 requested_except_inflight_txn.remove(&hash);
             } else {
                 if cmpct.reconstructed_txns.len() != 0 {
-                    info!("[performance testing] receive block hash:{:?} timestamp:{:?}", cmpct.hash(), SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos());
+                    //info!("[performance testing] receive block hash:{:?} timestamp:{:?}", cmpct.hash(), SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos());
+                    info!("[performance testing old version]")
                 }
 
                 let trans = cmpct

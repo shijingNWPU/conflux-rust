@@ -7,6 +7,13 @@ import datetime
 import arrow
 import pandas as pd
 from collections import OrderedDict
+import sys
+import openpyxl
+from openpyxl.utils.dataframe import dataframe_to_rows
+import numpy as np
+import random
+
+SHEET_NAME = ""
 
 broadcast_avg_map = {}
 wait_duration_map = {}
@@ -26,6 +33,8 @@ def get_tmpdir(path_head):
     return tmpdir
 
 def get_client():
+    global sign_time_avgduration_dict
+
     sign_time_durationlist_dict = {}
 
     with open("../extra-test-toolkits/scripts/file.txt", "r") as file:
@@ -50,15 +59,18 @@ def get_client():
             else:
                 sign_time_durationlist_dict[datetime_str] = [sign_performance]
 
-        for time, duration_list in sign_time_durationlist_dict.items():
-            avg_duration = sum(duration_list)/len(duration_list)
-            sign_time_avgduration_dict[time] = avg_duration
+    print(f"sign_time_durationlist_dict:{sign_time_durationlist_dict}")
 
-        all_duration = 0
-        for time, duration in sign_time_avgduration_dict.items():
-            all_duration = all_duration + duration
 
-        return all_duration/len(sign_time_avgduration_dict.keys())
+    for time, duration_list in sign_time_durationlist_dict.items():
+        avg_duration = sum(duration_list)/len(duration_list)
+        sign_time_avgduration_dict[time] = avg_duration
+
+    all_duration = 0
+    for time, duration in sign_time_avgduration_dict.items():
+        all_duration = all_duration + duration
+
+    return all_duration/len(sign_time_avgduration_dict.keys())
     
 def get_node_metrics(tmpdir, node):
     parsed_data = {}
@@ -289,8 +301,9 @@ def get_remote_wait_time(ips, blocks):
 
         for start_time, block_ids  in start_blockid_map.items():
             tmp_duration = 0
-            for block in block_ids:    
-                tmp_duration = tmp_duration + wait_time_per_ips[block]
+            for block in block_ids:
+                if block in wait_time_per_ips:
+                    tmp_duration = tmp_duration + wait_time_per_ips[block]
 
             if start_time in wait_duration_map:
                 wait_duration_map[start_time] = round((wait_duration_map[start_time] + (tmp_duration/len(block_ids))) / 2 , 5)
@@ -355,7 +368,13 @@ def get_fill_other_time():
                             df.loc[df["time"] == converted_time, "persist"] = df.loc[df["time"] == converted_time, "persist"] + value 
 
 def fill_sign():
+    global sign_time_avgduration_dict
     global df
+    
+
+    print(f"sign_time_avgduration_dict2:{sign_time_avgduration_dict}")
+    
+   
     for target_time, duration in sign_time_avgduration_dict.items():
         df.loc[df["time"] == target_time, "sign"] = duration
     
@@ -373,26 +392,64 @@ def fill_wait_time():
 
 
 def fill_time():
-    global df
-    first_key = sign_time_avgduration_dict.popitem(last=False)[0]
-    last_key = sign_time_avgduration_dict.popitem(last=True)[0]
+    global df 
+    global sign_time_avgduration_dict
+
+    # first_key = sign_time_avgduration_dict.popitem(last=False)[0]
+    # last_key = sign_time_avgduration_dict.popitem(last=True)[0]
+
+    first_key = list(sign_time_avgduration_dict.keys())[0]
+    last_key = list(sign_time_avgduration_dict.keys())[-1]
 
     first_time = pd.to_datetime(first_key)
-    last_time = pd.to_datetime(last_key) 
+    # last_time = pd.to_datetime(last_key) 
+    last_time = pd.to_datetime(last_key) + datetime.timedelta(seconds=10)  # 将last_time延后10秒
 
     current_time = first_time
     while current_time <= last_time:
         df = pd.concat([df, pd.DataFrame({'time': [current_time]})], ignore_index=True)
         current_time = current_time + datetime.timedelta(seconds=1)
-    
-    for i in range(0, 20):
-        df = pd.concat([df, pd.DataFrame({'time': [current_time]})], ignore_index=True)
-        current_time = current_time + datetime.timedelta(seconds=1)
 
     # fill threads num
+    return sign_time_avgduration_dict
 
+def fill_df(df):
+    for column_name, column_data in df.iteritems():
+        print(column_name)
+        if column_name == "time":
+            continue
+
+        is_first_nan = True
+        for row_index, row in column_data.iteritems():
+            if pd.isna(row):
+                if is_first_nan == True:
+                    continue
+                else:
+                    # 找前面的非空行，将其值赋给row
+                    # print("找前面的非空行，将其值赋给row")
+                    for prev_row_index, prev_row in column_data[:row_index][::-1].iteritems():
+                        if not pd.isna(prev_row):
+                            df.loc[row_index, column_name] = prev_row + random.uniform(-1 * prev_row/1000 , 1 * prev_row/1000) 
+                            break
+            else:
+                is_first_nan = False
+                continue
+    
     print(df)
 
+    filename = "total.xlsx"
+    try:
+        book = openpyxl.load_workbook(filename)
+    except Exception:
+        book = openpyxl.Workbook()
+
+    sheet = book.create_sheet(title=SHEET_NAME + "_fill")
+
+    rows = dataframe_to_rows(df, index=False, header=True)
+    for row in rows:
+        sheet.append(row)
+
+    book.save(filename)
 
 def get_remote_metrics():
     ips = []
@@ -431,9 +488,47 @@ def get_remote_metrics():
     get_fill_other_time()
 
     print(df)
-    df.to_csv('total.csv', index=True)
-    
 
+    # write to xlsx
+    filename = "total.xlsx"
+    try:
+        book = openpyxl.load_workbook(filename)
+    except Exception:
+        book = openpyxl.Workbook()
+
+    sheet = book.create_sheet(title=SHEET_NAME)
+
+    print(SHEET_NAME)
+
+    rows = dataframe_to_rows(df, index=False, header=True)
+    for row in rows:
+        sheet.append(row)
+
+
+    # get avg
+    column_means = df.apply(lambda x: np.mean(x.dropna()[(x != x.max()) & (x != x.min())]))
+    print(column_means)
+
+    sheet1 = book["Sheet"]
+    column_names = ['time', 'threads', 'check_parents', 'persist', 'broadcast', 'check_pow', 'pow', 'sign', 'getParents', 'waiting', 'order', 'state_update', 'verify_tx']
+    last_row = 2
+    for c_idx, value in enumerate(column_names, 1):
+        sheet1.cell(row=last_row, column=c_idx, value=value)
+
+    print("max_row:", sheet1.max_row)
+    last_row = sheet1.max_row + 1
+
+    # 将 column_means 数据写入工作表的第二行
+    for c_idx, value in enumerate(column_means, 1):
+        sheet1.cell(row=last_row, column=c_idx, value=value)
+
+
+    book.save(filename)
+     
+    
+    # fill df
+    print(column_means)
+    fill_df(df)
 
 
 # def write_excel():
@@ -445,6 +540,8 @@ def delete_file():
         os.remove("file.txt")
     
 if __name__ == "__main__":
+    SHEET_NAME = sys.argv[1]
+
     action = input("Enter action (experiment(e)/metrics(m)): ")
     if action == "e":
         delete_file()

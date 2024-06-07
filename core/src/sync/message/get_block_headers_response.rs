@@ -34,7 +34,7 @@ lazy_static! {
             "performance testing",
             "check_parents",
             //1024
-            3
+            10
         );
 }
 

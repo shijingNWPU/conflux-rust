@@ -43,7 +43,7 @@ lazy_static! {
             "performance testing",
             "verify_sign",
             //1024
-            3
+            10
         );
 }
 

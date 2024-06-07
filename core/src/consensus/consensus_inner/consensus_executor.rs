@@ -96,7 +96,7 @@ lazy_static! {
             "performance testing",
             "excution",
             //1024
-            3
+            10
         );
 }
 
