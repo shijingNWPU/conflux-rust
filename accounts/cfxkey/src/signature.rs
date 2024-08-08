@@ -27,7 +27,7 @@ use std::{
     fmt,
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut},
-    str::FromStr, time::Instant,
+    str::FromStr, 
 };
 use Address;
 use Error;
@@ -36,20 +36,6 @@ use Public;
 use Secret;
 use SECP256K1;
 use std::sync::Arc;
-
-extern crate metrics;
-use signature::metrics::{Histogram, Sample};
-
-lazy_static! {
-    static ref SIGNATURE_TIME: Arc<dyn Histogram> =
-        Sample::ExpDecay(0.015).register_with_group(
-            "performance testing",
-            "verify_curve_sign",
-            //1024
-            10
-        );
-}
-
 
 /// Signature encoded as RSV components
 #[repr(C)]
@@ -259,8 +245,6 @@ pub fn verify_address(
 pub fn recover(
     signature: &Signature, message: &Message,
 ) -> Result<Public, Error> {
-    let start_signature_time = Instant::now();
-
     let context = &SECP256K1;
     let rsig = RecoverableSignature::from_compact(
         context,
@@ -273,9 +257,6 @@ pub fn recover(
 
     let mut public = Public::default();
     public.as_bytes_mut().copy_from_slice(&serialized[1..65]);
-
-    SIGNATURE_TIME.update_since(start_signature_time);
-    
     Ok(public)
 }
 

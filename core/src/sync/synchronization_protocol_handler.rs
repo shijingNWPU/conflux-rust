@@ -1167,7 +1167,6 @@ impl SynchronizationProtocolHandler {
 
     pub fn on_mined_block(&self, mut block: Block) {
         let hash = block.block_header.hash();
-        info!("Mined block {:?} header={:?}", hash, block.block_header); // 
         let parent_hash = *block.block_header.parent_hash();
 
         assert!(self.graph.contains_block_header(&parent_hash));
@@ -1370,12 +1369,6 @@ impl SynchronizationProtocolHandler {
         let mut tx_hashes_part: Vec<H256> = vec![];
         let (short_ids_transactions, tx_hashes_transactions) = {
             let mut transactions = self.get_to_propagate_trans();
-            
-            if transactions.len() != 0 {
-                for tx in transactions.clone() {
-                    info!("get_to_propagate_trans:{:?}", tx.0);
-                }
-            }
 
             if transactions.is_empty() {
                 return;
@@ -1471,7 +1464,7 @@ impl SynchronizationProtocolHandler {
                 short_ids_part.pop().unwrap(),
                 tx_hashes_part.clone(),
             );
-            match tx_msg.send(io, &peer_id) {   // send tx
+            match tx_msg.send(io, &peer_id) {   
                 Ok(_) => {
                     trace!(
                         "{:02} <- Transactions ({} entries)",

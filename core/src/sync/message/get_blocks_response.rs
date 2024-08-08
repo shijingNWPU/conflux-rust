@@ -65,7 +65,6 @@ impl Handleable for GetBlocksResponse {
 
         ctx.manager.recover_public_queue.dispatch(
             ctx.io,
-            // todo
             RecoverPublicTask::new(
                 self.blocks,
                 requested_blocks,

@@ -12,7 +12,7 @@ use std::{
         mpsc::{channel, RecvError, Sender, TryRecvError},
         Arc,
     },
-    thread::{self, JoinHandle}, time::Instant,
+    thread::{self, JoinHandle},
 };
 
 use hash::KECCAK_EMPTY_LIST_RLP;
@@ -79,8 +79,6 @@ use cfx_executor::{
 };
 use cfx_vm_types::{Env, Spec};
 
-use metrics::{Histogram, Sample};
-
 lazy_static! {
     static ref CONSENSIS_EXECUTION_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "consensus::handle_epoch_execution");
@@ -91,13 +89,6 @@ lazy_static! {
         );
     static ref GOOD_TPS_METER: Arc<dyn Meter> =
         register_meter_with_group("system_metrics", "good_tps");
-    static ref EXECUTION_TIME: Arc<dyn Histogram> =
-        Sample::ExpDecay(0.015).register_with_group(
-            "performance testing",
-            "excution",
-            //1024
-            10
-        );
 }
 
 /// The RewardExecutionInfo struct includes most information to compute rewards
@@ -226,7 +217,6 @@ impl ConsensusExecutor {
         let executor = Arc::new(executor_raw);
         let executor_thread = executor.clone();
         // It receives blocks hashes from on_new_block and execute them
-        // shijing
         let handle = thread::Builder::new()
             .name("Consensus Execution Worker".into())
             .spawn(move || loop {
@@ -870,7 +860,6 @@ impl ConsensusExecutionHandler {
 
     /// Always return `true` for now
     fn handle_execution_work(&self, task: ExecutionTask) -> bool {
-        let start_execution_time = Instant::now();
         debug!("Receive execution task: {:?}", task);
         match task {
             ExecutionTask::ExecuteEpoch(task) => {
@@ -879,7 +868,6 @@ impl ConsensusExecutionHandler {
             ExecutionTask::GetResult(task) => self.handle_get_result_task(task),
             ExecutionTask::Stop => return false,
         }
-        EXECUTION_TIME.update_since(start_execution_time);
         true
     }
 
@@ -1052,7 +1040,6 @@ impl ConsensusExecutionHandler {
             epoch_hash,
             epoch_blocks.len(),
         );
-        // state update
         let mut state = State::new(StateDb::new(
             self.data_man
                 .storage_manager

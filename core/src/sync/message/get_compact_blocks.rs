@@ -95,10 +95,6 @@ impl Handleable for GetCompactBlocks {
             compact_blocks,
             blocks,
         };
-        info!("Receive GetCompactBlocks:{:?} {:?}", response.blocks, response.compact_blocks);
-        response.compact_blocks.iter().for_each(|block|{
-            info!("block_header.hash(): {:?}", block.block_header.hash());
-        });
         ctx.send_response(&response)
     }
 }

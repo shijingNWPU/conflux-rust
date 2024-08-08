@@ -120,10 +120,6 @@ impl Handleable for GetCompactBlocksResponse {
                 // The block remains inflight.
                 requested_except_inflight_txn.remove(&hash);
             } else {
-                if cmpct.reconstructed_txns.len() != 0 {
-                    //info!("[performance testing] receive block hash:{:?} timestamp:{:?}", cmpct.hash(), SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos());
-                    info!("[performance testing old version]")
-                }
 
                 let trans = cmpct
                     .reconstructed_txns
@@ -138,7 +134,6 @@ impl Handleable for GetCompactBlocksResponse {
                     block.transactions.len(),
                     block.size(),
                 );
-                // shijing: insert block to sync graph
                 let insert_result = ctx.manager.graph.insert_block(
                     block, true,  // need_to_verify
                     true,  // persistent

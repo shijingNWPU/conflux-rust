@@ -1982,7 +1982,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
         let session = self.network_service.sessions.get_by_id(node_id);
         trace!("Sending {} bytes to {}", msg.len(), node_id);
         if let Some(session) = session {
-            let mut latency =
+            let latency =
                 self.network_service.delayed_queue.as_ref().and_then(|q| {
                     session
                         .write()
@@ -1990,8 +1990,6 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
                         .id
                         .and_then(|id| q.latencies.read().get(&id).copied())
                 });
-            info!("[performance testing latency]latency:{:?}", latency);
-            latency = None;
             match latency {
                 Some(latency) => {
                     let q =

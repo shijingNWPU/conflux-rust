@@ -45,7 +45,6 @@ use crate::{
     verification::*,
     ConsensusGraph, Notifications,
 };
-use metrics::{Histogram, Sample};
 
 lazy_static! {
     static ref SYNC_INSERT_HEADER: Arc<dyn Meter> =
@@ -55,32 +54,6 @@ lazy_static! {
     static ref CONSENSUS_WORKER_QUEUE: Arc<dyn Queue> =
         register_queue("consensus_worker_queue");
 }
-
-lazy_static! {
-    static ref INSERT_BLOCK_BODY_TIME: Arc<dyn Histogram> =
-        Sample::ExpDecay(0.015).register_with_group(
-            "performance testing",
-            "insert_block_body",
-            //1024
-            10
-        );
-    static ref INSERT_BLOCK_HEAD_TIME: Arc<dyn Histogram> =
-        Sample::ExpDecay(0.015).register_with_group(
-            "performance testing",
-            "insert_block_head",
-            //1024
-            10
-        );
-        
-    static ref NONCE_CHECK_TIME: Arc<dyn Histogram> =
-        Sample::ExpDecay(0.015).register_with_group(
-            "performance testing",
-            "nonce_check",
-            //1024
-            10
-        );
-}
-
 
 const NULL: usize = !0;
 const BLOCK_INVALID: u8 = 0;
@@ -1081,7 +1054,6 @@ impl SynchronizationGraph {
 
         // It receives `BLOCK_GRAPH_READY` blocks in order and handles them in
         // `ConsensusGraph`
-        // shijing: receive block in sync graph 
         thread::Builder::new()
             .name("Consensus Worker".into())
             .spawn(move || {
@@ -1103,7 +1075,6 @@ impl SynchronizationGraph {
                         // with non-blocking `try_recv`.
                         let maybe_item = if blocking {
                             blocking = false;
-                            // shijing: consensus_receiver
                             match block_on(consensus_receiver.recv()) {
                                 Some(item) => Ok(item),
                                 None => break 'outer,
@@ -1173,7 +1144,6 @@ impl SynchronizationGraph {
                                 priority_queue.push((epoch_number, succ));
                             }
                         }
-                        // shijing: on new block
                         consensus.on_new_block(
                             &hash,
                         );
@@ -1580,30 +1550,18 @@ impl SynchronizationGraph {
                         .is_err())
         } else {
             if !bench_mode && !self.is_consortium() {
-                let start_nonce_check_time = Instant::now();
                 self.verification_config
                     .verify_pow(&self.pow, header)
-                    .expect("local mined block should pass this check!");
-
-                NONCE_CHECK_TIME.update_since(start_nonce_check_time);
-                
+                    .expect("local mined block should pass this check!");                
             }
             true
         };
-
-
-        let start_block_head_time = Instant::now();
-        
         let header_arc = Arc::new(header.clone());
         let me = if verification_passed {
             inner.insert(header_arc.clone())
         } else {
             inner.insert_invalid(header_arc.clone())
         };
-
-        info!("let's check block header:{:?}", header);
-        INSERT_BLOCK_HEAD_TIME.update_since(start_block_head_time);
-
 
         // Currently, `inner.arena[me].graph_status` will only be
         //   1. `BLOCK_GRAPH_READY` for genesis block.
@@ -1694,7 +1652,6 @@ impl SynchronizationGraph {
 
         self.consensus_unprocessed_count
             .fetch_add(1, Ordering::SeqCst);
-        // shijing consenus graph: send block
         assert!(self.new_block_hashes.send(h), "consensus receiver dropped");
 
         if inner.config.enable_state_expose {
@@ -1764,7 +1721,6 @@ impl SynchronizationGraph {
         &self, block: Block, need_to_verify: bool, persistent: bool,
         recover_from_db: bool,
     ) -> BlockInsertionResult {
-        let start_insert_body_time = Instant::now();
         let _timer = MeterTimer::time_func(SYNC_INSERT_BLOCK.as_ref());
         let hash = block.hash();
 
@@ -1875,11 +1831,6 @@ impl SynchronizationGraph {
             block.transactions.len(),
             block.size(),
         );
-        
-        if block.transactions.len() != 0 {
-            info!("[performance testing] Waiting start. block hash:{:?} timestamp:{:?}", block.hash(), SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos());
-            INSERT_BLOCK_BODY_TIME.update_since(start_insert_body_time);
-        }
 
         // Note: If `me` is invalid, it has been removed from `arena` now,
         // so we cannot access its `graph_status`.

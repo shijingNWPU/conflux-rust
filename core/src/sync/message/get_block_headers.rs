@@ -17,7 +17,6 @@ use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(
     Debug, PartialEq, Clone, RlpDecodable, RlpEncodable, DeriveMallocSizeOf,
@@ -58,9 +57,7 @@ impl Request for GetBlockHeaders {
 }
 
 impl Handleable for GetBlockHeaders {
-    fn handle(self, ctx: &Context) -> Result<(), Error> {
-        debug!("Received GetBlockHeaders {:?} timestamp:{:?}", self, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos());
-             
+    fn handle(self, ctx: &Context) -> Result<(), Error> {         
         let headers = self
             .hashes
             .iter()

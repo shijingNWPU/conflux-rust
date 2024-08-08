@@ -145,8 +145,6 @@ impl DeferredPool {
             .tx_sampler(&mut rng, block_gas_limit.into())
         {
             'sender: for tx in sender_txs.iter() {
-                info!("sender_txs tx:{:?}", tx);
-
                 match validity(&*tx) {
                     PackingCheckResult::Pack => {}
                     PackingCheckResult::Pending => {

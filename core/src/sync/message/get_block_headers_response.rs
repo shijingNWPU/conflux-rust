@@ -25,19 +25,6 @@ use std::{
     collections::HashSet,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use metrics::{Histogram, Sample};
-use std::sync::Arc;
-
-lazy_static! {
-    static ref CHECK_PARENTS_TIME: Arc<dyn Histogram> =
-        Sample::ExpDecay(0.015).register_with_group(
-            "performance testing",
-            "check_parents",
-            //1024
-            10
-        );
-}
-
 
 #[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
 pub struct GetBlockHeadersResponse {
@@ -60,7 +47,6 @@ impl Handleable for GetBlockHeadersResponse {
 
         if ctx.io.is_peer_self(&ctx.node_id) {
             let requested = self.headers.iter().map(|h| h.hash()).collect();
-            // shijing todo... get body: missing block
             self.handle_block_headers(
                 ctx,
                 &self.headers,
@@ -225,7 +211,6 @@ impl GetBlockHeadersResponse {
                 continue;
             }
 
-            let start_check_parents_time = Instant::now();
             // check missing dependencies
             let parent = header.parent_hash();
             if !ctx.manager.graph.contains_block_header(parent) {
@@ -246,8 +231,6 @@ impl GetBlockHeadersResponse {
             }
             need_to_relay.extend(to_relay);
 
-            CHECK_PARENTS_TIME.update_since(start_check_parents_time);
-
             // check block body
             if !ctx.manager.graph.contains_block(&hash) {
                 hashes.push(hash);
@@ -267,7 +250,6 @@ impl GetBlockHeadersResponse {
             "get headers response of hashes:{:?}, requesting block:{:?}",
             returned_headers, hashes
         );
-        //0xf85c50695bf4024e05aa0683d22ae3387093c36e00212a5ffa0e9b1645b40425
 
         ctx.manager.request_manager.headers_received(
             ctx.io,

@@ -418,7 +418,6 @@ impl TransactionPool {
         // Note, the workload of recovering public key is very heavy, especially
         // in case of high TPS (e.g. > 8000). So, it's better to recover public
         // key after basic verification.
-        //info!("self.data_man.recover_unsigned_tx:{:?}", self.data_man.recover_unsigned_tx(&transactions));
         match self.data_man.recover_unsigned_tx(&transactions) {
             Ok(signed_trans) => {       
                 let account_cache = self.get_best_state_account_cache();

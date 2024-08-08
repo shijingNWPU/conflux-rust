@@ -24,7 +24,6 @@ use std::{
     },
     time::Instant,
 };
-use std::time::{SystemTime, UNIX_EPOCH};
 
 lazy_static! {
     static ref READ_METER: Arc<dyn Meter> =
@@ -202,7 +201,6 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         // caller should guarantee to read all packets in a loop when Readable
         // IO event triggered.
         loop {
-            info!("[performance testing record] timestamp:{:?}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() );
             match self.socket.read(&mut buf) {
                 Ok(size) => {
                     trace!(
