@@ -1337,6 +1337,11 @@ impl Configuration {
             .unwrap_or(non_genesis_default_transition_time);
         params.transition_heights.cip112 =
             *CIP112_TRANSITION_HEIGHT.get().expect("initialized");
+        params.transition_numbers.cip1001 = self
+            .raw_conf
+            .hydra_transition_number
+            .unwrap_or(default_transition_time);
+        
         params.params_dao_vote_period = self.raw_conf.params_dao_vote_period;
 
         let mut base_block_rewards = BTreeMap::new();

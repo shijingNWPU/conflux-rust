@@ -24,6 +24,7 @@ mod blake2f;
 mod executable;
 
 pub use executable::BuiltinExec;
+use rust_dilithium2::sign::{PublicKey, SignedMessage, Message, KeyPair};
 
 use std::{
     cmp::{max, min},
@@ -34,7 +35,7 @@ use std::{
 
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 use cfx_bytes::BytesRef;
-use cfx_types::{Space, H256, U256};
+use cfx_types::{Secret, Space, H256, U256};
 use cfxkey::{public_to_address, recover as ec_recover, Address, Signature};
 use num::{BigUint, One, Zero};
 use parity_crypto::digest;
@@ -277,6 +278,7 @@ pub fn builtin_factory(name: &str) -> Box<dyn Impl> {
         "alt_bn128_mul" => Box::new(Bn128MulImpl) as Box<dyn Impl>,
         "alt_bn128_pairing" => Box::new(Bn128PairingImpl) as Box<dyn Impl>,
         "blake2_f" => Box::new(Blake2FImpl) as Box<dyn Impl>,
+        "postquantum" => Box::new(PostquantumImpl) as Box<dyn Impl>,
         _ => panic!("invalid builtin name: {}", name),
     }
 }
@@ -324,6 +326,10 @@ struct Bn128PairingImpl;
 #[derive(Debug)]
 #[allow(dead_code)]
 struct Blake2FImpl;
+
+#[derive(Debug)]
+#[allow(dead_code)]
+struct PostquantumImpl;
 
 impl Impl for Identity {
     fn execute(
@@ -771,6 +777,54 @@ impl Impl for Blake2FImpl {
     }
 }
 
+impl Impl for PostquantumImpl {
+    fn execute(
+        &self, input: &[u8], output: &mut BytesRef,
+    ) -> Result<(), Error> {
+        if input.len() < 6 {
+            return Err("Input data is too small".into());
+        }
+
+        let message_len = u16::from_le_bytes([input[0], input[1]]) as usize;
+        let secret_message_len = u16::from_le_bytes([input[2], input[3]]) as usize;
+        let public_key_len = u16::from_le_bytes([input[4], input[5]]) as usize;
+
+        let message_end = message_len + 6;
+        let secret_message_end = message_end + secret_message_len;
+        let public_key_end = secret_message_end + public_key_len;
+        
+        if input.len() < public_key_end {
+            return Err("Input data is too small".into());
+        }
+
+        let m = Message { 
+            data: input[6..message_end].to_vec(),
+        };
+
+        let sm = SignedMessage{
+            data: input[message_end..secret_message_end].to_vec(),
+            smlen: secret_message_len,
+        };
+
+        let pk = PublicKey{
+            data: input[secret_message_end..public_key_end].to_vec(),
+        };
+
+        let d = rust_dilithium2::sign::verify_sign(&m, &sm, &pk);
+        println!("d:{:?}", d);
+
+        match d {
+            Ok(_) => {
+                output.write(0, &[0]);
+            },
+            Err(_) => {
+                output.write(0, &[1]);
+            }
+        }
+        
+        Ok(())
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1468,5 +1522,49 @@ mod tests {
             .execute(&input[..], &mut BytesRef::Fixed(&mut out[..]))
             .unwrap();
         assert_eq!(&out[..], &expected[..]);
+    }
+
+    fn postquantum_construction() -> (rust_dilithium2::sign::Message, rust_dilithium2::sign::KeyPair, rust_dilithium2::sign::SignedMessage){
+        let message = rust_dilithium2::sign::generate_message().unwrap();
+        //println!("{:?}", message);
+        
+        let key_pair: rust_dilithium2::sign::KeyPair = rust_dilithium2::sign::get_key_pair().unwrap();
+        //println!("{:?}", key_pair);
+
+        let secret_message = rust_dilithium2::sign::sign(&message, &key_pair.secret_key).unwrap();
+        //println!("{:?}", secret_message);
+
+        (message, key_pair, secret_message)
+    }
+
+    #[test]
+    fn postquantum(){
+        let (message, key_pair, secret_message) = postquantum_construction();
+        
+        // input
+        let mut input_vec: Vec<u8> = Vec::new();
+        input_vec.extend(&(message.clone().data.len() as u16).to_le_bytes());
+        input_vec.extend(&(secret_message.clone().data.len() as u16).to_le_bytes());
+        input_vec.extend(&(key_pair.public_key.clone().data.len() as u16).to_le_bytes());
+
+        input_vec.extend(message.clone().data);
+        input_vec.extend(secret_message.clone().data);
+        input_vec.extend(key_pair.public_key.clone().data);
+
+        println!("input:{:?}", input_vec);
+
+        let f = Builtin {
+            pricer: Box::new(Linear { base: 0, word: 0 }),
+            native: builtin_factory("postquantum"),
+            activate_at: 0,
+        };
+        
+        let mut o = [1u8; 1];
+        println!("o:{:?}", o);
+        f.execute(&input_vec.as_slice(), &mut BytesRef::Fixed(&mut o[..]))
+         .expect("Builtin should not fail");
+
+        println!("o:{:?}", o);
+        assert_eq!(&o[..], &[0]);
     }
 }

@@ -168,6 +168,14 @@ fn new_builtin_map(
             params.transition_numbers.cip92,
         ),
     );
+    btree.insert(
+        Address::from(H256::from_low_u64_be(1001)),
+        Builtin::new(
+            Box::new(Linear::new(60, 12)),
+            builtin_factory("postquantum"),
+            params.transition_numbers.cip1001,
+        ),
+    );
     btree
 }
 

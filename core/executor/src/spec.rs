@@ -98,6 +98,8 @@ pub struct TransitionsBlockNumber {
     pub cip118: BlockNumber,
     /// CIP-119: PUSH0 instruction
     pub cip119: BlockNumber,
+    /// CIP-1001: Support algorithm
+    pub cip1001: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]
